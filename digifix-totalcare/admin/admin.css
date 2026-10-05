@@ -1,0 +1,37 @@
+.dtc-wrap { max-width: 1400px; }
+.dtc-grid { display: grid; gap: 16px; margin: 16px 0; }
+.dtc-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dtc-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dtc-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .dtc-grid-3, .dtc-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 782px) { .dtc-grid-2, .dtc-grid-3, .dtc-grid-4 { grid-template-columns: 1fr; } }
+
+.dtc-card { background: #fff; border: 1px solid #dcdcde; border-radius: 6px; padding: 16px 20px; margin: 16px 0; }
+.dtc-grid .dtc-card { margin: 0; }
+.dtc-card h2 { margin-top: 0; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.dtc-card h3 { margin-top: 24px; }
+
+.dtc-check { border-left-width: 4px; }
+.dtc-check.is-ok { border-left-color: #00a32a; }
+.dtc-check.is-bad { border-left-color: #d63638; }
+.dtc-check-title { font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.dtc-check.is-ok .dashicons { color: #00a32a; }
+.dtc-check.is-bad .dashicons { color: #d63638; }
+.dtc-check p { margin: 6px 0 0; color: #50575e; }
+
+.dtc-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; background: #f0f0f1; color: #50575e; }
+.dtc-success { background: #e7f6ec; color: #1e7e34; }
+.dtc-info { background: #e8f0fb; color: #0b5cab; }
+.dtc-warning { background: #fff6e0; color: #8a5300; }
+.dtc-error { background: #fdecea; color: #b3261e; }
+
+.dtc-inline { display: inline-block; margin: 0 6px 6px 0; }
+.dtc-mt { margin-top: 12px; }
+.dtc-nowrap { white-space: nowrap; }
+.dtc-danger { color: #b32d2e !important; border-color: #b32d2e !important; }
+.dtc-events td { vertical-align: top; }
+.dtc-json { max-width: 520px; max-height: 320px; overflow: auto; background: #f6f7f7; padding: 8px; font-size: 11px; white-space: pre-wrap; }
+.dtc-filters { margin: 12px 0; display: flex; gap: 8px; align-items: center; }
+.dtc-checklist { columns: 3 220px; }
+.dtc-checklist label { display: block; margin-bottom: 4px; break-inside: avoid; }
+.dtc-report-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
