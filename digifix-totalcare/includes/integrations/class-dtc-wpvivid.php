@@ -17,11 +17,15 @@ class DTC_WPvivid {
 	const RESULTS_OPTION = 'dtc_wpvivid_results';
 	const REMOTE_NAME    = 'Digifix TotalCare S3';
 	const TESTED_UP_TO   = '0.9.136';
+	const KICK_HOOK      = 'dtc_wpvivid_kick';
 
 	public static function init() {
 		add_action( 'wpvivid_handle_backup_2_succeed', array( __CLASS__, 'on_succeed' ), 20 );
 		add_action( 'wpvivid_handle_backup_2_failed', array( __CLASS__, 'on_failed' ), 20 );
 		add_filter( 'wpvivid_remote_register', array( __CLASS__, 'register_r2' ), 20 );
+		add_action( 'wp_ajax_dtc_run_wpvivid', array( __CLASS__, 'ajax_run_task' ) );
+		add_action( 'wp_ajax_nopriv_dtc_run_wpvivid', array( __CLASS__, 'ajax_run_task' ) );
+		add_action( self::KICK_HOOK, array( __CLASS__, 'run_task_if_ready' ) );
 		add_filter( 'wpvivid_storage_provider_tran', array( __CLASS__, 'r2_label' ), 20 );
 	}
 
@@ -213,11 +217,40 @@ class DTC_WPvivid {
 		}
 
 		$task_id = $ret['task_id'];
-		wp_schedule_single_event( time(), 'wpvivid_backup_2_schedule_event', array( $task_id ) );
-		if ( ! wp_doing_cron() ) {
-			spawn_cron();
-		}
+		// Start it now in its own request, with a cron fallback in case the
+		// loopback is lost. Both only run while the task is still "ready".
+		self::trigger( $task_id );
+		wp_schedule_single_event( time() + 3 * MINUTE_IN_SECONDS, self::KICK_HOOK, array( $task_id ) );
 		return $task_id;
+	}
+
+	public static function trigger( $task_id ) {
+		DTC_Storage::loopback( 'dtc_run_wpvivid', array( 'task_id' => $task_id ) );
+	}
+
+	/** Signed loopback that runs a WPvivid backup task (WPvivid ends the request). */
+	public static function ajax_run_task() {
+		$ts  = isset( $_POST['ts'] ) ? (int) $_POST['ts'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$sig = isset( $_POST['sig'] ) ? sanitize_text_field( wp_unslash( $_POST['sig'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		if ( ! DTC_Storage::verify( 'dtc_run_wpvivid', $ts, $sig ) ) {
+			wp_send_json( array( 'ok' => false ), 403 );
+		}
+		self::run_task_if_ready( sanitize_key( wp_unslash( $_POST['task_id'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		wp_send_json( array( 'ok' => true, 'started' => false ) );
+	}
+
+	/** Run WPvivid's backup for a task that has not started yet. */
+	public static function run_task_if_ready( $task_id ) {
+		global $wpvivid_plugin;
+		if ( ! $task_id || ! self::is_available() ) {
+			return;
+		}
+		$task = WPvivid_taskmanager::get_task( $task_id );
+		if ( ! is_array( $task ) || 'ready' !== ( $task['status']['str'] ?? '' ) ) {
+			return;
+		}
+		ignore_user_abort( true );
+		$wpvivid_plugin->backup2->backup_schedule( $task_id ); // Calls die() when done.
 	}
 
 	public static function is_backup_running() {
@@ -268,19 +301,33 @@ class DTC_WPvivid {
 			if ( in_array( $str, array( 'error', 'cancel' ), true ) ) {
 				return array( 'status' => 'failed', 'error' => $task['status']['error'] ?? $str, 'progress' => '' );
 			}
+			// Never picked up: retry once after 5 minutes, give up after 20.
+			$waiting = time() - (int) ( $task['status']['task_start_time'] ?? time() );
+			if ( 'ready' === $str ) {
+				if ( $waiting > 20 * MINUTE_IN_SECONDS ) {
+					return array( 'status' => 'failed', 'error' => 'WPvivid never started the backup task (still "ready" after 20 minutes). Loopback requests to admin-ajax.php or WP-Cron are not running on this server.', 'progress' => '' );
+				}
+				if ( $waiting > 5 * MINUTE_IN_SECONDS && ! get_transient( 'dtc_rekick_' . $task_id ) ) {
+					set_transient( 'dtc_rekick_' . $task_id, 1, HOUR_IN_SECONDS );
+					self::trigger( $task_id );
+				}
+				return array( 'status' => 'running', 'error' => '', 'progress' => 'Waiting for WPvivid to start (' . human_time_diff( time() - $waiting ) . ')' );
+			}
 			$progress = '';
 			if ( class_exists( 'WPvivid_Backup_Task_2' ) ) {
 				$info     = ( new WPvivid_Backup_Task_2( $task_id ) )->get_backup_task_info();
 				$progress = is_array( $info ) && isset( $info['task_info']['descript'] ) ? wp_strip_all_tags( $info['task_info']['descript'] ) : '';
 			}
-			return array( 'status' => 'running', 'error' => '', 'progress' => $progress ?: $str );
+			return array( 'status' => 'running', 'error' => '', 'progress' => 'WPvivid ' . $str . ( $progress ? ': ' . $progress : '' ) );
 		}
 
 		// Task record was cleaned up; fall back to the backup list.
 		if ( self::get_backup( $task_id ) ) {
 			return array( 'status' => 'completed', 'error' => '', 'progress' => '' );
 		}
-		return array( 'status' => 'unknown', 'error' => '', 'progress' => '' );
+		// WPvivid deletes its task list whenever a new task is created, so a
+		// backup started elsewhere (WPvivid UI, another schedule) erases ours.
+		return array( 'status' => 'failed', 'error' => 'The WPvivid task record disappeared (another backup was probably started from WPvivid directly), and no finished backup was saved.', 'progress' => '' );
 	}
 
 	public static function get_backup( $backup_id ) {

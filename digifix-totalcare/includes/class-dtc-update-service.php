@@ -110,7 +110,7 @@ class DTC_Update_Service {
 		if ( 'completed' !== $status['status'] ) {
 			$timeout = (int) DTC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
 			if ( time() - (int) $job->get( 'backup_started' ) > $timeout ) {
-				return $this->abort( $job, 'Updates skipped because the pre-update backup timed out.' );
+				return $this->abort( $job, 'Updates skipped because the pre-update backup did not finish within ' . DTC_Settings::get( 'backup_timeout_hours' ) . ' hours. Last WPvivid status: ' . ( $status['progress'] ?: $status['status'] ) . '. See WPvivid → Logs for details.' );
 			}
 			$job->wait( 60, 'Pre-update backup: ' . ( $status['progress'] ?: $status['status'] ) );
 			return;

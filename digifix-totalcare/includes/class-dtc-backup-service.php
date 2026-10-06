@@ -50,7 +50,7 @@ class DTC_Backup_Service {
 				}
 				$timeout = (int) DTC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
 				if ( time() - (int) $job->get( 'started' ) > $timeout ) {
-					return $this->failed( $job, 'Backup did not finish within ' . DTC_Settings::get( 'backup_timeout_hours' ) . ' hours.' );
+					return $this->failed( $job, 'Backup did not finish within ' . DTC_Settings::get( 'backup_timeout_hours' ) . ' hours. Last WPvivid status: ' . ( $status['progress'] ?: $status['status'] ) . '. See WPvivid → Logs for details.' );
 				}
 				$job->wait( 60, 'Backup running: ' . ( $status['progress'] ?: $status['status'] ) );
 				return;

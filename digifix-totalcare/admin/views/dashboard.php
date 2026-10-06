@@ -58,7 +58,16 @@ $dtc_checks = array(
 						<td>#<?php echo (int) $dtc_job->id; ?> <?php echo esc_html( ucfirst( $dtc_job->type ) ); ?></td>
 						<td><?php echo self::badge( 'running' === $dtc_job->status ? 'info' : 'muted', $dtc_job->status ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
 						<td><code><?php echo esc_html( $dtc_job->step ); ?></code></td>
-						<td><?php echo esc_html( $dtc_job->message ); ?></td>
+						<td>
+							<?php
+							$dtc_msg = $dtc_job->message;
+							if ( 'pending' === $dtc_job->status && $dtc_active[0]->id !== $dtc_job->id ) {
+								// Jobs run one at a time so a backup, an update run and a scan never overlap.
+								$dtc_msg = sprintf( 'Waiting for #%d %s to finish (jobs run one at a time).', $dtc_active[0]->id, $dtc_active[0]->type );
+							}
+							echo esc_html( $dtc_msg );
+							?>
+						</td>
 						<td><?php echo esc_html( self::when( $dtc_job->created_at ) ); ?></td>
 						<td><?php self::form( 'dtc_cancel', 'Cancel', array( 'job_id' => $dtc_job->id ), 'button-link-delete', 'Cancel this job?' ); ?></td>
 					</tr>
