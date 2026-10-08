@@ -49,7 +49,8 @@ Sites update themselves from GitHub Releases. They need version 1.0.4 or later i
    ```bash
    git commit -am "Release 1.0.5"
    git tag v1.0.5
-   git push origin main --tags
+   git push origin main
+   git push origin v1.0.5   # push the tag on its own; pushing it with the branch can skip the release run
    ```
 3. GitHub Actions (`.github/workflows/release.yml`):
    - lints the PHP with PHP 7.4;
