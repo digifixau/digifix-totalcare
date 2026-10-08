@@ -22,9 +22,23 @@ class DTC_Update_Service {
 	}
 
 	public static function queue( $trigger = 'manual' ) {
-		$job = DTC_Jobs::create( 'update', array( 'trigger' => $trigger ), 'preflight' );
+		$job = DTC_Jobs::create(
+			'update',
+			array(
+				'trigger' => $trigger,
+				'engine'  => DTC_Backup_Service::engine(),
+			),
+			'preflight'
+		);
 		DTC_Jobs::kick();
 		return $job;
+	}
+
+	/** Remove uploads and partial objects of an unfinished pre-update backup. */
+	public function cleanup( DTC_Job $job ) {
+		if ( 'wpvivid' !== $job->get( 'engine' ) ) {
+			DTC_Backup_Runner::cleanup( $job );
+		}
 	}
 
 	public function max_age() {
@@ -48,8 +62,15 @@ class DTC_Update_Service {
 		self::load_wp_admin();
 
 		$problems = array();
-		if ( ! DTC_WPvivid::is_available() || ! DTC_WPvivid::get_remote() ) {
-			$problems[] = 'WPvivid with an S3 remote is required so a backup can be taken first.';
+		if ( 'wpvivid' === $job->get( 'engine' ) ) {
+			if ( ! DTC_WPvivid::is_available() || ! DTC_WPvivid::get_remote() ) {
+				$problems[] = 'WPvivid with an S3 remote is required so a backup can be taken first.';
+			}
+		} else {
+			$remote = DTC_Bk_Remote::from_settings();
+			if ( is_wp_error( $remote ) ) {
+				$problems[] = 'A backup must be taken first, but remote storage is not ready: ' . $remote->get_error_message();
+			}
 		}
 		if ( ! DTC_Installer::guardian_installed() ) {
 			$problems[] = 'The guardian mu-plugin is not installed.';
@@ -90,6 +111,12 @@ class DTC_Update_Service {
 	}
 
 	private function step_backup_start( DTC_Job $job ) {
+		if ( 'wpvivid' !== $job->get( 'engine' ) ) {
+			DTC_Backup_Runner::start( $job, 'update' );
+			$job->set( 'backup_started', time() );
+			$job->go( 'backup_run', 0, 'Pre-update backup running.' );
+			return;
+		}
 		$task_id = DTC_WPvivid::start_backup( true );
 		if ( is_wp_error( $task_id ) ) {
 			if ( 'dtc_wpvivid_busy' === $task_id->get_error_code() && $job->age() < 2 * HOUR_IN_SECONDS ) {
@@ -100,6 +127,32 @@ class DTC_Update_Service {
 		}
 		$job->set( 'backup_id', $task_id )->set( 'backup_started', time() );
 		$job->go( 'backup_wait', 60, 'Pre-update backup running.' );
+	}
+
+	/** Pre-update backup with TotalCare's engine, inside this job. */
+	private function step_backup_run( DTC_Job $job ) {
+		$res = DTC_Backup_Runner::step( $job );
+		if ( is_wp_error( $res ) ) {
+			DTC_Backup_Runner::cleanup( $job );
+			DTC_Logger::log( 'backup', 'error', 'backup.failed', 'Pre-update backup failed: ' . $res->get_error_message(), array( 'pre_update' => true ), $job->id );
+			return $this->abort( $job, 'Updates skipped because the pre-update backup failed: ' . $res->get_error_message() );
+		}
+		if ( 'done' !== $res ) {
+			$timeout = (int) DTC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
+			if ( time() - (int) $job->get( 'backup_started' ) > $timeout ) {
+				DTC_Backup_Runner::cleanup( $job );
+				return $this->abort( $job, 'Updates skipped because the pre-update backup did not finish within ' . DTC_Settings::get( 'backup_timeout_hours' ) . ' hours.' );
+			}
+			$job->go( 'backup_run', 0 );
+			return;
+		}
+		$bk      = (array) $job->get( DTC_Backup_Runner::KEY );
+		$summary = (array) ( $bk['summary'] ?? array() );
+		$job->set( 'backup_id', $summary['backup_id'] ?? '' );
+		DTC_Logger::log( 'backup', 'success', 'backup.completed', sprintf( 'Pre-update %s backup completed (%s, %s files changed).', $summary['type'] ?? '', $summary['size_human'] ?? '?', number_format_i18n( $summary['changed_files'] ?? 0 ) ), $summary + array( 'pre_update' => true ), $job->id );
+		// The bulky backup state is no longer needed in this long-running job.
+		$job->set( DTC_Backup_Runner::KEY, array( 'phase' => 'done', 'summary' => $summary ) );
+		$job->go( 'baseline' );
 	}
 
 	private function step_backup_wait( DTC_Job $job ) {
@@ -345,7 +398,18 @@ class DTC_Update_Service {
 		$reason = (string) $job->get( 'restore_reason', 'Health check failed.' );
 		DTC_Logger::log( 'update', 'error', 'update.restore_needed', $reason . ' Restoring the pre-update backup.', array(), $job->id );
 
-		$res = DTC_Restore::begin( $job->get( 'backup_id' ), $job->id, $reason, $job->state );
+		// Updates only change code and the database; leave uploads alone.
+		$res = DTC_Restore::begin(
+			$job->get( 'backup_id' ),
+			$job->id,
+			$reason,
+			$job->state,
+			array(
+				'engine' => $job->get( 'engine' ),
+				'scope'  => array( 'db', 'core', 'plugins', 'themes', 'muplugins' ),
+				'clean'  => true,
+			)
+		);
 		if ( is_wp_error( $res ) ) {
 			$msg = $reason . ' Automatic restore could not start: ' . $res->get_error_message();
 			$job->fail( $msg );
@@ -390,6 +454,9 @@ class DTC_Update_Service {
 
 		$check = DTC_Health_Check::check( $job->get( 'baseline' ), time() );
 		$job->set( 'final_check', array( 'passed' => $check['passed'], 'hard' => $check['hard'], 'soft' => $check['soft'] ) );
+		if ( $check['passed'] ) {
+			DTC_Restore::drop_rollback_tables();
+		}
 		$msg = 'Updates were reverted by restoring the pre-update backup. ' . ( $check['passed'] ? 'Site is healthy again.' : 'Site is STILL failing health checks.' );
 		DTC_Logger::log( 'update', $check['passed'] ? 'warning' : 'error', 'update.restored', $msg, $this->summary( $job ), $job->id );
 		$job->finish( 'failed', $msg );

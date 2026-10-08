@@ -91,22 +91,39 @@ class DTC_Job {
 		return time() - strtotime( $this->created_at . ' UTC' );
 	}
 
+	/**
+	 * Save the job. Only an active row is updated, so a step that is still
+	 * running cannot undo a cancel.
+	 *
+	 * @return bool False when the job is no longer active in the database.
+	 */
 	public function save() {
 		global $wpdb;
 		$this->updated_at = current_time( 'mysql', true );
-		return false !== $wpdb->update(
-			DTC_Jobs::table(),
-			array(
-				'status'      => $this->status,
-				'step'        => $this->step,
-				'state'       => wp_json_encode( $this->state ),
-				'message'     => $this->message,
-				'attempts'    => $this->attempts,
-				'updated_at'  => $this->updated_at,
-				'next_run_at' => $this->next_run_at,
-				'finished_at' => $this->finished_at,
-			),
-			array( 'id' => $this->id )
+		$state            = wp_json_encode( $this->state, JSON_INVALID_UTF8_SUBSTITUTE );
+		$table            = DTC_Jobs::table();
+		$finished         = $this->finished_at ? $wpdb->prepare( '%s', $this->finished_at ) : 'NULL';
+		$rows             = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE $table SET status = %s, step = %s, state = %s, message = %s, attempts = %d, updated_at = %s, next_run_at = %d, finished_at = $finished WHERE id = %d AND status IN ('pending','running')", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$this->status,
+				$this->step,
+				false === $state ? '{}' : $state,
+				(string) $this->message,
+				$this->attempts,
+				$this->updated_at,
+				$this->next_run_at,
+				$this->id
+			)
 		);
+		if ( false === $rows ) {
+			return false;
+		}
+		if ( 0 === (int) $rows ) {
+			// No change also reports 0 rows; check the row is still active.
+			$status = $wpdb->get_var( $wpdb->prepare( "SELECT status FROM $table WHERE id = %d", $this->id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			return in_array( $status, array( 'pending', 'running' ), true ) || $status === $this->status;
+		}
+		return true;
 	}
 }

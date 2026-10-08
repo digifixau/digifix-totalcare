@@ -140,6 +140,7 @@ class DTC_Scheduler {
 		DTC_Snapshot::cleanup( (int) DTC_Settings::get( 'snapshot_keep_days' ) );
 		DTC_Logger::prune();
 		DTC_Jobs::prune();
+		DTC_Retention_Service::queue();
 	}
 
 	public static function next_runs() {

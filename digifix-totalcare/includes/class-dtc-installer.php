@@ -16,6 +16,8 @@ class DTC_Installer {
 		DTC_Storage::ensure_dirs();
 		DTC_Storage::secret();
 		self::install_guardian();
+		self::litespeed_rule( true );
+		self::import_wpvivid_credentials();
 		DTC_Scheduler::reschedule();
 		DTC_Logger::log( 'system', 'info', 'system.activated', 'Digifix TotalCare activated (v' . DTC_VERSION . ').' );
 	}
@@ -25,6 +27,7 @@ class DTC_Installer {
 		// Keep the guardian while a restore is running; it needs to finish it.
 		if ( ! DTC_Restore::in_progress() ) {
 			self::remove_guardian();
+			self::litespeed_rule( false );
 		}
 	}
 
@@ -37,6 +40,55 @@ class DTC_Installer {
 		$target = 'mu' === $mode ? self::mu_path() : ( 'dropin' === $mode ? self::dropin_guardian_path() : '' );
 		if ( ! $target || ! file_exists( $target ) || md5_file( $target ) !== md5_file( $source ) ) {
 			self::install_guardian();
+		}
+		if ( get_option( 'dtc_installed_version' ) !== DTC_VERSION ) {
+			self::litespeed_rule( true );
+			self::import_wpvivid_credentials();
+			update_option( 'dtc_installed_version', DTC_VERSION, false );
+		}
+	}
+
+	const HTACCESS_MARKER = 'Digifix TotalCare';
+
+	/**
+	 * LiteSpeed kills a PHP request as soon as the client disconnects unless
+	 * "noabort" is set. TotalCare's background work runs in fire-and-forget
+	 * loopback requests, so set it for admin-ajax.php and wp-cron.php.
+	 * Harmless elsewhere: the rule only applies under LiteSpeed.
+	 */
+	public static function litespeed_rule( $add ) {
+		$file = ABSPATH . '.htaccess';
+		if ( ! file_exists( $file ) || ! is_writable( $file ) ) {
+			return false;
+		}
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		$lines = $add ? array(
+			'<IfModule LiteSpeed>',
+			'RewriteEngine On',
+			'RewriteRule ^(wp-admin/admin-ajax\.php|wp-cron\.php)$ - [E=noabort:1,E=noconntimeout:1]',
+			'</IfModule>',
+		) : array();
+		return insert_with_markers( $file, self::HTACCESS_MARKER, $lines );
+	}
+
+	/**
+	 * Before 1.1, WPvivid held the S3 secret. Copy it once so the built-in
+	 * engine works without re-entering credentials.
+	 */
+	public static function import_wpvivid_credentials() {
+		if ( get_option( 'dtc_s3_secret' ) || ! class_exists( 'WPvivid_Setting' ) ) {
+			return;
+		}
+		$remote = DTC_WPvivid::get_remote();
+		if ( ! $remote || empty( $remote['secret'] ) ) {
+			return;
+		}
+		DTC_Storage::secret(); // The encryption key is derived from it.
+		$secret = ! empty( $remote['is_encrypt'] ) ? base64_decode( $remote['secret'], true ) : $remote['secret']; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
+		$stored = is_string( $secret ) && '' !== $secret ? DTC_Bk_Util::encrypt( $secret ) : '';
+		if ( '' !== $stored ) {
+			update_option( 'dtc_s3_secret', $stored, false );
+			DTC_Logger::log( 'system', 'info', 'system.s3_imported', 'S3 credentials copied from WPvivid; backups now use TotalCare\'s built-in engine.' );
 		}
 	}
 

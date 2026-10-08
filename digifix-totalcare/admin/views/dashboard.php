@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$dtc_wpvivid   = DTC_WPvivid::status();
+$dtc_backups   = DTC_Backup_Service::status();
 $dtc_wordfence = DTC_Wordfence::status();
 $dtc_last_tick = (int) get_option( 'dtc_last_tick' );
 $dtc_next      = DTC_Scheduler::next_runs();
@@ -25,11 +25,12 @@ $dtc_last_backup = current(
 $dtc_last_update = current( DTC_Jobs::recent( 'update', 1 ) );
 $dtc_last_scan   = DTC_Logger::latest( 'scan.completed' );
 $dtc_skip        = (array) get_option( DTC_Update_Service::SKIP_OPTION, array() );
-$dtc_latest      = DTC_WPvivid::latest_backup();
+$dtc_engine      = DTC_Backup_Service::engine();
+$dtc_latest      = 'wpvivid' === $dtc_engine ? DTC_WPvivid::latest_backup() : null;
 $dtc_recent      = DTC_Logger::query( array( 'per_page' => 12 ) )['rows'];
 
 $dtc_checks = array(
-	array( $dtc_wpvivid['ok'], 'Backups (WPvivid + S3)', $dtc_wpvivid['message'] . ( ! empty( $dtc_wpvivid['warning'] ) ? ' ' . $dtc_wpvivid['warning'] : '' ) ),
+	array( $dtc_backups['ok'], 'wpvivid' === $dtc_engine ? 'Backups (WPvivid + S3)' : 'Backups', $dtc_backups['message'] . ( ! empty( $dtc_backups['warning'] ) ? ' ' . $dtc_backups['warning'] : '' ) ),
 	array( $dtc_wordfence['ok'], 'Malware scans (Wordfence)', $dtc_wordfence['message'] . ( ! empty( $dtc_wordfence['warning'] ) ? ' ' . $dtc_wordfence['warning'] : '' ) ),
 	array( DTC_Installer::guardian_installed(), 'Guardian (rollback safety net)', DTC_Installer::guardian_installed() ? ( 'mu' === DTC_Installer::guardian_mode() ? 'Installed in mu-plugins.' : 'Installed via wp-content/fatal-error-handler.php (mu-plugins is read-only on this host).' ) : 'Missing: rollback and restore are disabled. ' . ( DTC_Installer::guardian_error() ?: 'Reload this page to retry the install.' ) ),
 	array( $dtc_last_tick > time() - 10 * MINUTE_IN_SECONDS, 'Scheduler', $dtc_last_tick ? 'Last tick ' . human_time_diff( $dtc_last_tick ) . ' ago.' . ( $dtc_last_tick < time() - 10 * MINUTE_IN_SECONDS ? ' WP-Cron is not running often enough. Add a server cron job for wp-cron.php every minute.' : '' ) : 'WP-Cron has not run yet.' ),
@@ -92,6 +93,9 @@ $dtc_checks = array(
 			</p>
 			<p><strong>Next:</strong> <?php echo esc_html( self::when( $dtc_next['backup'] ) ); ?></p>
 			<?php self::form( 'dtc_run', 'Back up now', array( 'type' => 'backup' ), 'button button-primary' ); ?>
+			<?php if ( 'wpvivid' !== $dtc_engine ) : ?>
+				<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=dtc-backups' ) ); ?>">All backups &amp; restore</a>
+			<?php endif; ?>
 		</div>
 
 		<div class="dtc-card">
@@ -156,11 +160,18 @@ $dtc_checks = array(
 
 		<div class="dtc-card">
 			<h2>Restore</h2>
-			<?php if ( $dtc_latest ) : ?>
+			<?php if ( 'wpvivid' !== $dtc_engine ) : ?>
+				<p>Restore the whole site or only parts of it (database, plugins, themes, uploads, or single folders) from any backup on the <a href="<?php echo esc_url( admin_url( 'admin.php?page=dtc-backups' ) ); ?>">Backups page</a>.</p>
+				<p class="description">Only files that differ are downloaded. The database is prepared while the site stays online, and the replaced tables are kept until the restored site passes its health check.</p>
+				<?php $dtc_last_restore = DTC_Logger::latest( 'restore.completed' ); ?>
+				<?php if ( $dtc_last_restore ) : ?>
+					<p><strong>Last restore:</strong> <?php echo esc_html( self::when( $dtc_last_restore['created_at'] ) ); ?></p>
+				<?php endif; ?>
+			<?php elseif ( $dtc_latest ) : ?>
 				<?php $dtc_sum = DTC_WPvivid::summarize( $dtc_latest['id'] ); ?>
 				<p>Latest backup: <strong><?php echo esc_html( wp_date( 'D j M Y, g:i a', (int) $dtc_sum['created'] ) ); ?></strong> (<?php echo esc_html( $dtc_sum['size_human'] ); ?>, <?php echo $dtc_sum['local'] ? 'local + S3' : 'S3 only; will be downloaded first'; ?>).</p>
 				<p class="description">Restoring replaces all files and the database with this backup. TotalCare's own log is kept. The site is unavailable for a few minutes while it runs.</p>
-				<?php self::form( 'dtc_restore', 'Restore this backup', array( 'backup_id' => $dtc_latest['id'] ), 'button button-secondary dtc-danger', 'Restore the whole site from the backup taken ' . wp_date( 'j M Y g:i a', (int) $dtc_sum['created'] ) . '? All changes since then will be lost.' ); ?>
+				<?php self::form( 'dtc_restore', 'Restore this backup', array( 'backup_id' => $dtc_latest['id'], 'engine' => 'wpvivid' ), 'button button-secondary dtc-danger', 'Restore the whole site from the backup taken ' . wp_date( 'j M Y g:i a', (int) $dtc_sum['created'] ) . '? All changes since then will be lost.' ); ?>
 				<p class="description dtc-mt">Older backups can be restored from <a href="<?php echo esc_url( admin_url( 'admin.php?page=WPvivid' ) ); ?>">WPvivid → Backup &amp; Restore</a>.</p>
 			<?php else : ?>
 				<p>No backups found in WPvivid yet.</p>

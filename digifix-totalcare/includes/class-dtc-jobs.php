@@ -10,10 +10,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DTC_Jobs {
 
-	const TICK_BUDGET = 40; // Seconds of work per tick before yielding.
+	/** A step that is killed this many times in a row without progress fails. */
+	const MAX_KILLED = 5;
 
 	/** @var array<string,object> type => handler with run(DTC_Job) and max_age(). */
 	private static $handlers = array();
+
+	/** @var float Absolute time the current tick must stop working. */
+	private static $deadline = 0;
+
+	/**
+	 * Deadline for long-running steps. Steps check it and yield before it,
+	 * so a host that kills PHP after ~30 s does not interrupt them.
+	 */
+	public static function deadline() {
+		return self::$deadline ? self::$deadline : microtime( true ) + DTC_Bk_Util::budget();
+	}
 
 	public static function table() {
 		global $wpdb;
@@ -95,6 +107,19 @@ class DTC_Jobs {
 		if ( $job && $job->is_active() ) {
 			$job->finish( 'cancelled', 'Cancelled by ' . ( wp_get_current_user()->user_login ?: 'system' ) );
 			DTC_Logger::log( $job->type, 'warning', $job->type . '.cancelled', 'Job #' . $job->id . ' cancelled.', array(), $job->id );
+			self::cleanup( $job );
+		}
+	}
+
+	/** Let the handler release what a stopped job left behind (uploads, files). */
+	private static function cleanup( DTC_Job $job ) {
+		$handler = self::$handlers[ $job->type ] ?? null;
+		if ( $handler && method_exists( $handler, 'cleanup' ) ) {
+			try {
+				$handler->cleanup( $job );
+			} catch ( Throwable $e ) {
+				DTC_Logger::log( $job->type, 'warning', $job->type . '.cleanup_failed', 'Cleanup after job #' . $job->id . ' failed: ' . $e->getMessage(), array(), $job->id );
+			}
 		}
 	}
 
@@ -123,7 +148,7 @@ class DTC_Jobs {
 	}
 
 	/**
-	 * Advance the head-of-queue job for up to TICK_BUDGET seconds.
+	 * Advance the head-of-queue job until the request budget is used up.
 	 */
 	public static function tick() {
 		update_option( 'dtc_last_tick', time(), false );
@@ -138,14 +163,13 @@ class DTC_Jobs {
 			return;
 		}
 
-		ignore_user_abort( true );
-		if ( function_exists( 'set_time_limit' ) ) {
-			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		}
-
-		$started = time();
+		DTC_Bk_Util::extend_time_limit();
+		$budget         = DTC_Bk_Util::budget();
+		self::$deadline = microtime( true ) + $budget;
+		$more           = false;
 		try {
-			while ( time() - $started < self::TICK_BUDGET ) {
+			// Only start a step when a useful part of the budget is left.
+			while ( microtime( true ) < self::$deadline - min( 8, $budget / 3 ) ) {
 				$active = self::active();
 				if ( ! $active ) {
 					break;
@@ -159,8 +183,17 @@ class DTC_Jobs {
 					break;
 				}
 			}
+			$active = DTC_Restore::in_progress() ? array() : self::active();
+			$more   = $active && $active[0]->next_run_at <= time();
 		} finally {
 			self::release_lock();
+			self::$deadline = 0;
+		}
+
+		// Work is waiting: continue in a fresh request instead of waiting
+		// for the next cron minute. Low impact mode leaves that pause in.
+		if ( $more && empty( DTC_Settings::get( 'low_impact' ) ) ) {
+			self::kick();
 		}
 	}
 
@@ -175,12 +208,27 @@ class DTC_Jobs {
 			$job->fail( 'Job exceeded its maximum run time at step "' . $job->step . '".' );
 			DTC_Logger::log( $job->type, 'error', $job->type . '.timeout', $job->message, array( 'step' => $job->step ), $job->id );
 			DTC_Notifier::notify( $job->type . '.failed', array( 'error' => $job->message ), $job->id );
+			self::cleanup( $job );
 			return;
 		}
 
+		// Count entries into this step. A request killed by the host never
+		// returns here to reset the counter.
+		$entries = (int) $job->get( '_entries', 0 ) + 1;
+		if ( $entries > self::MAX_KILLED ) {
+			$msg = 'Step "' . $job->step . '" was stopped by the server ' . self::MAX_KILLED . ' times in a row (PHP time or memory limit). Try a smaller "Work per request" setting.';
+			$job->fail( $msg );
+			DTC_Logger::log( $job->type, 'error', $job->type . '.failed', $msg, array( 'step' => $job->step ), $job->id );
+			DTC_Notifier::notify( $job->type . '.failed', array( 'error' => $msg ), $job->id );
+			self::cleanup( $job );
+			return;
+		}
+		$job->set( '_entries', $entries );
 		if ( 'pending' === $job->status ) {
 			$job->status = 'running';
-			$job->save();
+		}
+		if ( ! $job->save() ) {
+			return;
 		}
 
 		$before = array( $job->step, $job->next_run_at, $job->status );
@@ -189,10 +237,12 @@ class DTC_Jobs {
 		} catch ( Throwable $e ) {
 			++$job->attempts;
 			$msg = sprintf( 'Step "%s" threw %s: %s', $job->step, get_class( $e ), $e->getMessage() );
+			$job->set( '_entries', 0 );
 			if ( $job->attempts >= 3 ) {
 				$job->fail( $msg );
 				DTC_Logger::log( $job->type, 'error', $job->type . '.failed', $msg, array( 'step' => $job->step ), $job->id );
 				DTC_Notifier::notify( $job->type . '.failed', array( 'error' => $msg ), $job->id );
+				self::cleanup( $job );
 			} else {
 				$job->next_run_at = time() + 60;
 				$job->message     = $msg . ' (will retry)';
@@ -201,9 +251,12 @@ class DTC_Jobs {
 			return;
 		}
 
+		$job->set( '_entries', 0 );
 		// Guard against a handler that neither advanced nor rescheduled.
 		if ( $job->is_active() && array( $job->step, $job->next_run_at, $job->status ) === $before ) {
 			$job->wait( 60 );
+		} elseif ( $job->is_active() ) {
+			$job->save();
 		}
 	}
 

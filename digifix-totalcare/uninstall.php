@@ -1,6 +1,6 @@
 <?php
 /**
- * Remove TotalCare data. WPvivid backups and the S3 remote are left untouched.
+ * Remove TotalCare data. Backups in remote storage (and WPvivid's) are left untouched.
  */
 
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
@@ -12,8 +12,20 @@ global $wpdb;
 $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}dtc_jobs" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
 $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}dtc_events" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
 
-foreach ( array( 'dtc_settings', 'dtc_db_version', 'dtc_last_tick', 'dtc_guardian_error', 'dtc_update_skip', 'dtc_wpvivid_results' ) as $dtc_option ) {
+// Temporary and pre-restore copies of tables left by a restore.
+foreach ( array_merge( (array) $wpdb->get_col( "SHOW TABLES LIKE 'dtcr\\_%'" ), (array) $wpdb->get_col( "SHOW TABLES LIKE 'dtcold\\_%'" ) ) as $dtc_table ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$wpdb->query( 'DROP TABLE IF EXISTS `' . str_replace( '`', '``', $dtc_table ) . '`' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.NotPrepared
+}
+
+foreach ( array( 'dtc_settings', 'dtc_db_version', 'dtc_last_tick', 'dtc_guardian_error', 'dtc_update_skip', 'dtc_wpvivid_results', 'dtc_s3_secret', 'dtc_site_uuid', 'dtc_installed_version' ) as $dtc_option ) {
 	delete_option( $dtc_option );
+}
+
+// LiteSpeed noabort rule added by the installer.
+$dtc_htaccess = ABSPATH . '.htaccess';
+if ( file_exists( $dtc_htaccess ) && is_writable( $dtc_htaccess ) ) {
+	require_once ABSPATH . 'wp-admin/includes/misc.php';
+	insert_with_markers( $dtc_htaccess, 'Digifix TotalCare', array() );
 }
 
 $dtc_guardian = WPMU_PLUGIN_DIR . '/dtc-guardian.php';

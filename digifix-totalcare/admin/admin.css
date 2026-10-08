@@ -35,3 +35,13 @@
 .dtc-checklist { columns: 3 220px; }
 .dtc-checklist label { display: block; margin-bottom: 4px; break-inside: avoid; }
 .dtc-report-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dtc-backups td { vertical-align: top; }
+.dtc-actions { min-width: 260px; }
+.dtc-actions details { display: inline-block; vertical-align: top; margin: 0 6px 6px 0; }
+.dtc-actions details[open] { display: block; }
+.dtc-actions summary { list-style: none; cursor: pointer; }
+.dtc-actions summary::-webkit-details-marker { display: none; }
+.dtc-restore-form { margin-top: 8px; padding: 12px; background: #f6f7f7; border: 1px solid #dcdcde; border-radius: 4px; max-width: 520px; }
+.dtc-restore-form fieldset { columns: 2 200px; }
+.dtc-restore-form fieldset label { display: block; margin-bottom: 4px; }
+.dtc-downloads a { display: inline-block; margin: 2px 10px 2px 0; }

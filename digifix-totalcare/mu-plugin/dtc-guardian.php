@@ -1,12 +1,13 @@
 <?php
 /**
  * Plugin Name: Digifix TotalCare Guardian
- * Description: Safety net for Digifix TotalCare. Records PHP fatal errors, rolls back a plugin/theme update that crashes the site, and drives full WPvivid restores while TotalCare is deactivated. Installed and removed automatically by Digifix TotalCare.
- * Version:     1.0.0
+ * Description: Safety net for Digifix TotalCare. Records PHP fatal errors, rolls back a plugin/theme update that crashes the site, and drives site restores before other plugins load. Installed and removed automatically by Digifix TotalCare.
+ * Version:     1.1.0
  * Author:      Digifix
  *
- * This file must stay self-contained: it runs when TotalCare is deactivated
- * (during a WPvivid restore) and when a broken plugin crashes every request.
+ * This file must stay self-contained: it runs when a broken plugin crashes
+ * every request, and drives restores before regular plugins and the theme
+ * load (TotalCare's engine is loaded from a pinned copy in dtc-data).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,14 +19,16 @@ if ( defined( 'DTC_GUARDIAN_VERSION' ) ) {
 	return;
 }
 
-define( 'DTC_GUARDIAN_VERSION', '1.0.0' );
+define( 'DTC_GUARDIAN_VERSION', '1.1.0' );
 
 final class DTC_Guardian {
 
 	const FATAL_TYPES = array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR );
+	const ACTIVE      = array( 'pending', 'running', 'finishing', 'failing' );
 
 	private static $handled = false;
 	private static $lock    = null;
+	private static $driving = false;
 
 	public static function boot() {
 		// WordPress's fatal error handler dies after rendering, so hook into
@@ -41,6 +44,16 @@ final class DTC_Guardian {
 
 		add_filter( 'wpvivid_enable_plugins_list', array( __CLASS__, 'keep_totalcare_active' ) );
 		add_action( 'init', array( __CLASS__, 'watchdog' ), 1 );
+
+		// Restores with TotalCare's engine run before regular plugins load.
+		// As an mu-plugin the database is ready now, so dispatch at once
+		// (other mu-plugins restored by the backup cannot break it); from the
+		// drop-in it is too early, so wait for muplugins_loaded.
+		if ( isset( $GLOBALS['wpdb'] ) && is_object( $GLOBALS['wpdb'] ) && did_action( 'muplugins_loaded' ) === 0 && function_exists( 'get_option' ) ) {
+			self::early();
+		} else {
+			add_action( 'muplugins_loaded', array( __CLASS__, 'early' ), 0 );
+		}
 	}
 
 	/* ---------------------------------------------------------------------
@@ -65,8 +78,12 @@ final class DTC_Guardian {
 			@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
 		$file = self::dir() . '/' . $name . '.json';
-		$tmp  = $file . '.' . getmypid() . '.' . mt_rand() . '.tmp';
-		if ( false !== @file_put_contents( $tmp, json_encode( $data, JSON_PRETTY_PRINT ) ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.json_encode_json_encode
+		$json = json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
+		if ( false === $json ) {
+			return; // Never replace the file with an empty one.
+		}
+		$tmp = $file . '.' . getmypid() . '.' . mt_rand() . '.tmp';
+		if ( false !== @file_put_contents( $tmp, $json ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			@rename( $tmp, $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
 	}
@@ -153,10 +170,12 @@ final class DTC_Guardian {
 
 		self::maybe_rollback_inflight( $entry );
 
-		$req = self::read( 'restore-request' );
-		if ( $req && in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing' ), true ) && defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'dtc_guardian_restore' === $_POST['action'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$req     = self::read( 'restore-request' );
+		$legacy  = 'totalcare' !== ( $req['engine'] ?? 'wpvivid' );
+		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'dtc_guardian_restore' === $_POST['action'] ) : self::$driving; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		if ( $req && in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing' ), true ) && $restore ) {
 			$req['errors'] = (int) ( $req['errors'] ?? 0 ) + 1;
-			$req['error']  = 'PHP fatal during restore: ' . $entry['message'];
+			$req['error']  = 'PHP fatal during restore: ' . $entry['message'] . ' in ' . $entry['file'] . ':' . $entry['line'];
 			if ( $req['errors'] >= 3 ) {
 				$req['status'] = 'failing';
 			}
@@ -164,7 +183,7 @@ final class DTC_Guardian {
 			self::write( 'restore-request', $req );
 			// Continue (or fail) in a fresh request; this one is about to die.
 			self::unlock();
-			self::loopback( 'dtc_guardian_restore', array( 'wpvivid_restore' => 1 ) );
+			self::loopback( 'dtc_guardian_restore', $legacy ? array( 'wpvivid_restore' => 1 ) : array() );
 		}
 	}
 
@@ -253,7 +272,232 @@ final class DTC_Guardian {
 	}
 
 	/* ---------------------------------------------------------------------
-	 * Full restore driver
+	 * Restore driver (TotalCare engine)
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * Runs on every request before regular plugins load, but only does
+	 * anything while a restore with TotalCare's engine is in progress.
+	 */
+	public static function early() {
+		static $done = false;
+		if ( $done ) {
+			return;
+		}
+		$done  = true;
+		$token = isset( $_GET['dtc_restore_status'] ) ? (string) wp_unslash( $_GET['dtc_restore_status'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		if ( ! file_exists( self::dir() . '/restore-request.json' ) ) {
+			// Progress page of a restore that has already been reconciled.
+			$last = '' !== $token ? self::read( 'restore-last' ) : null;
+			if ( $last && ! empty( $last['token'] ) && hash_equals( (string) $last['token'], $token ) ) {
+				self::render_status( $last );
+			}
+			return;
+		}
+		$req = self::read( 'restore-request' );
+		if ( ! $req || 'totalcare' !== ( $req['engine'] ?? '' ) ) {
+			return;
+		}
+		$token_ok = '' !== $token && ! empty( $req['token'] ) && hash_equals( (string) $req['token'], $token );
+		if ( ! in_array( $req['status'] ?? '', self::ACTIVE, true ) ) {
+			if ( $token_ok ) {
+				self::render_status( $req );
+			}
+			return;
+		}
+
+		// Background updates must not change files mid-restore.
+		add_filter( 'automatic_updater_disabled', '__return_true', 99 );
+
+		// 1. The restore chain itself.
+		if ( defined( 'DOING_AJAX' ) && DOING_AJAX && 'dtc_guardian_restore' === ( $_POST['action'] ?? '' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			if ( ! self::verify_request( 'dtc_guardian_restore' ) ) {
+				self::json( array( 'ok' => false ), 403 );
+			}
+			self::json( self::drive() );
+		}
+
+		// 2. Progress page (works while the site shows the maintenance page).
+		if ( $token_ok ) {
+			self::watchdog_new( $req, true );
+			self::render_status( self::read( 'restore-request' ) );
+		}
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			return;
+		}
+
+		// 3. Every other request: keep the chain alive, and show the
+		//    maintenance page while code and tables are being replaced.
+		self::watchdog_new( $req, ! empty( $req['maintenance'] ) );
+		if ( ! empty( $req['maintenance'] ) ) {
+			self::render_maintenance();
+		}
+	}
+
+	/**
+	 * Restart a stalled restore chain. If loopback requests keep failing
+	 * (firewall, basic auth), run one step inline instead.
+	 */
+	private static function watchdog_new( array $req, $may_run_inline ) {
+		$stalled = time() - (int) ( $req['updated'] ?? 0 );
+		if ( $stalled < 90 ) {
+			return;
+		}
+		$marker = self::dir() . '/restore-watchdog.txt';
+		if ( file_exists( $marker ) && time() - filemtime( $marker ) < 60 ) {
+			return;
+		}
+		@touch( $marker ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( $may_run_inline && $stalled > 300 ) {
+			self::drive();
+			return;
+		}
+		self::loopback( 'dtc_guardian_restore' );
+	}
+
+	/** Run one restore step in this request (WP-CLI fallback). */
+	public static function step_now() {
+		return self::drive();
+	}
+
+	/** One locked step of the restore. @return array Response data. */
+	private static function drive() {
+		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		self::$lock = fopen( self::dir() . '/restore.lock', 'c' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+		if ( ! self::$lock || ! flock( self::$lock, LOCK_EX | LOCK_NB ) ) {
+			return array(
+				'ok'   => true,
+				'busy' => true,
+			);
+		}
+		$req = self::read( 'restore-request' );
+		if ( ! $req || ! in_array( $req['status'] ?? '', self::ACTIVE, true ) ) {
+			self::unlock();
+			return array(
+				'ok'   => true,
+				'idle' => true,
+			);
+		}
+
+		ignore_user_abort( true );
+		$started = microtime( true );
+		if ( 'failing' !== $req['status'] && time() - (int) ( $req['created'] ?? time() ) > 6 * HOUR_IN_SECONDS ) {
+			$req['status'] = 'failing';
+			$req['error']  = 'Restore did not finish within 6 hours.';
+		}
+		if ( 'pending' === $req['status'] ) {
+			$req['status'] = 'running';
+		}
+		$req['updated'] = time();
+		self::write( 'restore-request', $req );
+
+		self::$driving = true;
+		$loader        = rtrim( (string) ( $req['engine_dir'] ?? '' ), '/' ) . '/loader.php';
+		try {
+			if ( ! is_readable( $loader ) ) {
+				throw new Exception( 'The restore engine is missing (' . $loader . ').' );
+			}
+			require_once $loader;
+			DTC_Bk_Util::extend_time_limit();
+			$deadline = $started + DTC_Bk_Util::budget();
+			if ( 'failing' === $req['status'] ) {
+				$req = DTC_Bk_Restore_Engine::fail( $req, $req['error'] ? $req['error'] : 'Restore failed.' );
+			} else {
+				$req = DTC_Bk_Restore_Engine::run( $req, $deadline );
+			}
+		} catch ( Throwable $e ) {
+			$msg = $e->getMessage() . ( $e instanceof DTC_Bk_Exception ? '' : ' (' . basename( $e->getFile() ) . ':' . $e->getLine() . ')' );
+			if ( class_exists( 'DTC_Bk_Restore_Engine', false ) ) {
+				$req = DTC_Bk_Restore_Engine::fail( $req, $msg );
+			} else {
+				$req['status']      = 'failed';
+				$req['maintenance'] = false;
+				$req['error']       = $msg;
+			}
+		}
+		self::$driving = false;
+
+		$req['updated'] = time();
+		self::write( 'restore-request', $req );
+		self::unlock();
+
+		if ( in_array( $req['status'], array( 'running', 'failing' ), true ) ) {
+			self::loopback( 'dtc_guardian_restore' );
+		} else {
+			// Let TotalCare reconcile right away (plugins load normally again).
+			self::loopback( 'dtc_kick' );
+		}
+		if ( ! empty( $req['maintenance'] ) || 'done' === $req['status'] ) {
+			header( 'X-LiteSpeed-Purge: *' );
+		}
+		return array(
+			'ok'     => true,
+			'status' => $req['status'],
+		);
+	}
+
+	private static function json( array $data, $code = 200 ) {
+		if ( ! headers_sent() ) {
+			http_response_code( $code );
+			header( 'Content-Type: application/json; charset=utf-8' );
+			header( 'Cache-Control: no-store' );
+		}
+		echo json_encode( $data ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode, WordPress.Security.EscapeOutput.OutputNotEscaped
+		exit;
+	}
+
+	private static function no_cache_headers() {
+		if ( headers_sent() ) {
+			return;
+		}
+		header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+		header( 'X-LiteSpeed-Cache-Control: no-cache' );
+		header( 'Content-Type: text/html; charset=utf-8' );
+	}
+
+	private static function render_maintenance() {
+		self::no_cache_headers();
+		if ( ! headers_sent() ) {
+			http_response_code( 503 );
+			header( 'Retry-After: 120' );
+		}
+		echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="60"><title>Maintenance</title>'
+			. '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f7;color:#1d2327;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:16px}main{max-width:460px;text-align:center}h1{font-size:22px}</style>'
+			. '</head><body><main><h1>Scheduled maintenance</h1><p>This site is being updated and will be back in a few minutes.</p></main></body></html>';
+		exit;
+	}
+
+	private static function render_status( $req ) {
+		self::no_cache_headers();
+		$req    = is_array( $req ) ? $req : array();
+		$status = (string) ( $req['status'] ?? 'unknown' );
+		$active = in_array( $status, self::ACTIVE, true );
+		$labels = array(
+			'pending' => 'Starting',
+			'running' => 'Restoring',
+			'failing' => 'Cleaning up after an error',
+			'done'    => 'Finished',
+			'failed'  => 'Failed',
+		);
+		$e      = function ( $s ) {
+			return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' );
+		};
+		echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+			. ( $active ? '<meta http-equiv="refresh" content="10">' : '' )
+			. '<title>Restore progress</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f7;color:#1d2327;margin:0;padding:24px 16px}main{max-width:720px;margin:0 auto;background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px}pre{white-space:pre-wrap;word-break:break-word;background:#f6f7f7;padding:12px;font-size:12px;max-height:50vh;overflow:auto}.s{font-weight:600}</style></head><body><main>'
+			. '<h1>Site restore</h1>'
+			. '<p class="s">' . $e( $labels[ $status ] ?? ucfirst( $status ) ) . '</p>'
+			. '<p>' . $e( $req['progress'] ?? '' ) . '</p>'
+			. ( ! empty( $req['error'] ) ? '<p style="color:#b32d2e">' . $e( $req['error'] ) . '</p>' : '' )
+			. '<pre>' . $e( implode( "\n", (array) ( $req['log'] ?? array() ) ) ) . '</pre>'
+			. ( $active ? '<p>This page refreshes every 10 seconds. You can close it; the restore continues on its own.</p>' : '<p><a href="' . $e( admin_url( 'admin.php?page=dtc-backups' ) ) . '">Back to TotalCare</a></p>' )
+			. '</main></body></html>';
+		exit;
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Legacy restore driver (WPvivid engine)
 	 * ------------------------------------------------------------------ */
 
 	public static function keep_totalcare_active( $plugins ) {
@@ -274,7 +518,7 @@ final class DTC_Guardian {
 			return;
 		}
 		$req = self::read( 'restore-request' );
-		if ( ! $req || ! in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing', 'failing' ), true ) ) {
+		if ( ! $req || 'totalcare' === ( $req['engine'] ?? '' ) || ! in_array( $req['status'] ?? '', self::ACTIVE, true ) ) {
 			return;
 		}
 		if ( time() - (int) ( $req['updated'] ?? 0 ) > 90 && get_transient( 'dtc_guardian_watchdog' ) === false ) {
@@ -286,6 +530,11 @@ final class DTC_Guardian {
 	public static function ajax_restore() {
 		if ( ! self::verify_request( 'dtc_guardian_restore' ) ) {
 			wp_send_json( array( 'ok' => false ), 403 );
+		}
+		$current = self::read( 'restore-request' );
+		if ( $current && 'totalcare' === ( $current['engine'] ?? '' ) ) {
+			// Handled before plugins load; reaching here means it already ran.
+			wp_send_json( array( 'ok' => true, 'idle' => true ) );
 		}
 
 		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
