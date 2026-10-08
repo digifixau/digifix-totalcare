@@ -1,0 +1,72 @@
+name: Build & release
+
+# Every push / PR: lint the plugin.
+# Pushing a tag like v1.0.4: also build digifix-totalcare.zip and publish it as
+# a GitHub Release. Sites pick it up through DTC_Updater.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: digifix-totalcare
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 7.4 (oldest supported version)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          tools: composer:v2
+          coverage: none
+
+      - name: Lint PHP
+        run: |
+          find . -name '*.php' -not -path './vendor/*' -print0 \
+            | xargs -0 -n1 php -l > /dev/null
+
+      - name: Check the tag matches the plugin version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          HEADER=$(grep -Po '^\s*\*\s*Version:\s*\K[0-9][^\s]*' digifix-totalcare.php)
+          CONST=$(grep -Po "define\(\s*'DTC_VERSION',\s*'\K[^']+" digifix-totalcare.php)
+          echo "tag=$TAG header=$HEADER constant=$CONST"
+          if [ "$TAG" != "$HEADER" ] || [ "$TAG" != "$CONST" ]; then
+            echo "::error::Tag v$TAG does not match the plugin header ($HEADER) and DTC_VERSION ($CONST). Bump both in digifix-totalcare.php before tagging."
+            exit 1
+          fi
+
+      - name: Install production dependencies (dompdf)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+
+      - name: Build zip
+        working-directory: .
+        run: |
+          zip -qr digifix-totalcare.zip digifix-totalcare \
+            -x '*.DS_Store' 'digifix-totalcare/composer.lock'
+          unzip -l digifix-totalcare.zip | tail -1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digifix-totalcare
+          path: digifix-totalcare.zip
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" digifix-totalcare.zip \
+            --title "Digifix TotalCare ${GITHUB_REF_NAME}" \
+            --generate-notes

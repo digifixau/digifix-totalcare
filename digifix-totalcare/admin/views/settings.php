@@ -95,6 +95,7 @@ $dtc_text     = function ( $name, $type = 'text', $placeholder = '', $class = 'r
 					<p class="description">One URL per line on this site (e.g. shop, checkout, contact form). The home page and login page are always checked.</p>
 				</td></tr>
 				<tr><th>Strict checks</th><td><?php $dtc_check( 'health_strict', 'Also roll back when a page title changes or a page size changes by more than 50%' ); ?></td></tr>
+				<tr><th>TotalCare itself</th><td><?php $dtc_check( 'self_update', 'Install new TotalCare releases from GitHub automatically' ); ?><p class="description">Installed version <?php echo esc_html( DTC_VERSION ); ?>. Updates are never applied while a TotalCare job or restore is running.</p></td></tr>
 				<tr><th>Keep rollback copies for</th><td><?php $dtc_text( 'snapshot_keep_days', 'number', '', 'small-text' ); ?> days</td></tr>
 			</table>
 		</div>

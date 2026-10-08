@@ -435,6 +435,9 @@ class DTC_Update_Service {
 			$updates = get_site_transient( 'update_plugins' );
 			$plugins = get_plugins();
 			foreach ( (array) ( $updates->response ?? array() ) as $file => $info ) {
+				if ( DTC_BASENAME === $file ) {
+					continue; // TotalCare updates itself through DTC_Updater.
+				}
 				$item = array(
 					'kind'       => 'plugin',
 					'id'         => $file,
@@ -444,7 +447,7 @@ class DTC_Update_Service {
 					'status'     => 'pending',
 					'was_active' => is_plugin_active( $file ),
 				);
-				$queue[] = $this->apply_skip_rules( $item, in_array( $file, (array) $s['excluded_plugins'], true ) || DTC_BASENAME === $file, empty( $info->package ), $skip );
+				$queue[] = $this->apply_skip_rules( $item, in_array( $file, (array) $s['excluded_plugins'], true ), empty( $info->package ), $skip );
 			}
 		}
 

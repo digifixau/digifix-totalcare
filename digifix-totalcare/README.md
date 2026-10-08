@@ -40,6 +40,30 @@ A WordPress plugin, installed on each client site, that runs routine maintenance
      If `mu-plugins` is read-only (on some Hostinger plans it links to a host-managed folder), the guardian is loaded instead through the WordPress drop-in `wp-content/fatal-error-handler.php`, from `wp-content/dtc-data/dtc-guardian.php`. If another plugin already uses that drop-in, the dashboard shows the guardian as missing.
 4. Go to **TotalCare → Settings** and enter the S3 details. When you save, WPvivid uploads a test file, saves the remote as its default backup destination, and turns off its own schedule.
 
+## Releasing an update
+
+Sites update themselves from GitHub Releases. They need version 1.0.4 or later installed once by hand; after that, updates are automatic.
+
+1. Bump the version in `digifix-totalcare.php`, in both the `Version:` header and `DTC_VERSION`.
+2. Commit, tag and push:
+   ```bash
+   git commit -am "Release 1.0.5"
+   git tag v1.0.5
+   git push origin main --tags
+   ```
+3. GitHub Actions (`.github/workflows/release.yml`):
+   - lints the PHP with PHP 7.4;
+   - checks the tag matches the version in the plugin file;
+   - runs `composer install --no-dev` (dompdf);
+   - builds `digifix-totalcare.zip`;
+   - publishes a GitHub Release with the zip attached.
+4. Each site checks GitHub for a new release at most every 6 hours. Go to **Dashboard → Updates → Check again** to check immediately.
+   - The new version shows like any other plugin update.
+   - With "Install new TotalCare releases from GitHub automatically" turned on (Settings → Safe updates, on by default), WordPress's background updater installs it within about 12 hours.
+   - It never installs while a TotalCare job or restore is running.
+
+Every push to `main` also lints the code and uploads a test zip as a workflow artifact, without releasing it.
+
 ## How it works
 
 ### Job engine

@@ -26,6 +26,7 @@ final class DTC_Plugin {
 
 		DTC_Scheduler::init();
 		DTC_WPvivid::init();
+		DTC_Updater::init();
 
 		add_action( 'wp_ajax_dtc_kick', array( $this, 'ajax_kick' ) );
 		add_action( 'wp_ajax_nopriv_dtc_kick', array( $this, 'ajax_kick' ) );

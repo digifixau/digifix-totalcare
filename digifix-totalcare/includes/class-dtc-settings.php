@@ -40,6 +40,7 @@ class DTC_Settings {
 			'health_urls'           => '',
 			'health_strict'         => 0,
 			'snapshot_keep_days'    => 14,
+			'self_update'           => 1,
 
 			// Scans.
 			'scan_enabled'          => 1,
@@ -97,7 +98,7 @@ class DTC_Settings {
 			return in_array( $v, $allowed, true ) ? $v : $fallback;
 		};
 
-		foreach ( array( 'backup_enabled', 'updates_enabled', 'update_plugins', 'update_themes', 'health_strict', 'scan_enabled', 'email_failures', 'email_update_summary', 'email_scan_summary', 'client_gets_summaries', 'monthly_report', 'monthly_attach_pdf' ) as $flag ) {
+		foreach ( array( 'backup_enabled', 'updates_enabled', 'update_plugins', 'update_themes', 'health_strict', 'self_update', 'scan_enabled', 'email_failures', 'email_update_summary', 'email_scan_summary', 'client_gets_summaries', 'monthly_report', 'monthly_attach_pdf' ) as $flag ) {
 			$out[ $flag ] = empty( $input[ $flag ] ) ? 0 : 1;
 		}
 
