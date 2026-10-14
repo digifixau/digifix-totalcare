@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Scan_Service {
+class Digifix_TC_Scan_Service {
 
 	const SCAN_TIMEOUT = 4 * HOUR_IN_SECONDS;
 
@@ -16,8 +16,8 @@ class DTC_Scan_Service {
 	}
 
 	public static function queue( $trigger = 'manual' ) {
-		$job = DTC_Jobs::create( 'scan', array( 'trigger' => $trigger ) );
-		DTC_Jobs::kick();
+		$job = Digifix_TC_Jobs::create( 'scan', array( 'trigger' => $trigger ) );
+		Digifix_TC_Jobs::kick();
 		return $job;
 	}
 
@@ -25,32 +25,32 @@ class DTC_Scan_Service {
 		return self::SCAN_TIMEOUT + 2 * HOUR_IN_SECONDS;
 	}
 
-	public function run( DTC_Job $job ) {
+	public function run( Digifix_TC_Job $job ) {
 		switch ( $job->step ) {
 			case 'start':
-				if ( ! DTC_Wordfence::is_available() ) {
+				if ( ! Digifix_TC_Wordfence::is_available() ) {
 					return $this->failed( $job, 'Wordfence is not active.' );
 				}
-				if ( DTC_Wordfence::is_running() ) {
+				if ( Digifix_TC_Wordfence::is_running() ) {
 					if ( $job->age() > HOUR_IN_SECONDS ) {
 						return $this->failed( $job, 'A Wordfence scan has been running for over an hour; skipped.' );
 					}
 					$job->wait( 5 * MINUTE_IN_SECONDS, 'Another Wordfence scan is running; waiting.' );
 					return;
 				}
-				$type    = DTC_Settings::get( 'scan_type' );
+				$type    = Digifix_TC_Settings::get( 'scan_type' );
 				$started = time();
-				$res     = DTC_Wordfence::start( $type );
+				$res     = Digifix_TC_Wordfence::start( $type );
 				if ( is_wp_error( $res ) ) {
 					return $this->failed( $job, $res->get_error_message() );
 				}
 				$job->set( 'started', $started )->set( 'scan_type', $type );
-				DTC_Logger::log( 'scan', 'info', 'scan.started', ucfirst( $type ) . ' Wordfence scan started.', array( 'scan_type' => $type ), $job->id );
+				Digifix_TC_Logger::log( 'scan', 'info', 'scan.started', ucfirst( $type ) . ' Wordfence scan started.', array( 'scan_type' => $type ), $job->id );
 				$job->go( 'poll', 90, 'Scan running.' );
 				return;
 
 			case 'poll':
-				$status = DTC_Wordfence::scan_status( (float) $job->get( 'started' ) );
+				$status = Digifix_TC_Wordfence::scan_status( (float) $job->get( 'started' ) );
 				if ( 'completed' === $status['status'] ) {
 					$job->go( 'collect' );
 					return;
@@ -65,10 +65,10 @@ class DTC_Scan_Service {
 				return;
 
 			case 'collect':
-				$results              = DTC_Wordfence::results();
+				$results              = Digifix_TC_Wordfence::results();
 				$results['scan_type'] = $job->get( 'scan_type' );
 				$results['duration']  = time() - (int) $job->get( 'started' );
-				$threshold            = (int) DTC_Settings::get( 'scan_alert_severity' );
+				$threshold            = (int) Digifix_TC_Settings::get( 'scan_alert_severity' );
 				$alerts               = array_values(
 					array_filter(
 						$results['issues'],
@@ -85,13 +85,13 @@ class DTC_Scan_Service {
 				$msg   = $new
 					? sprintf( 'Scan completed: %d open issue(s) (%s).', $new, self::severity_summary( $results['by_severity'] ) )
 					: 'Scan completed: no issues found.';
-				DTC_Logger::log( 'scan', $level, 'scan.completed', $msg, $results, $job->id );
+				Digifix_TC_Logger::log( 'scan', $level, 'scan.completed', $msg, $results, $job->id );
 				$job->complete( $msg );
 
 				if ( $alerts ) {
-					DTC_Notifier::notify( 'scan.issues_found', array_merge( $results, array( 'issues' => $alerts ) ), $job->id );
+					Digifix_TC_Notifier::notify( 'scan.issues_found', array_merge( $results, array( 'issues' => $alerts ) ), $job->id );
 				}
-				DTC_Notifier::notify( 'scan.completed', $results, $job->id );
+				Digifix_TC_Notifier::notify( 'scan.completed', $results, $job->id );
 				return;
 		}
 		$job->fail( 'Unknown step ' . $job->step );
@@ -107,9 +107,9 @@ class DTC_Scan_Service {
 		return implode( ', ', $parts );
 	}
 
-	private function failed( DTC_Job $job, $error ) {
+	private function failed( Digifix_TC_Job $job, $error ) {
 		$job->fail( $error );
-		DTC_Logger::log( 'scan', 'error', 'scan.failed', 'Scan failed: ' . $error, array(), $job->id );
-		DTC_Notifier::notify( 'scan.failed', array( 'error' => $error ), $job->id );
+		Digifix_TC_Logger::log( 'scan', 'error', 'scan.failed', 'Scan failed: ' . $error, array(), $job->id );
+		Digifix_TC_Notifier::notify( 'scan.failed', array( 'error' => $error ), $job->id );
 	}
 }

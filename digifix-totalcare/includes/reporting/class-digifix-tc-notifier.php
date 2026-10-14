@@ -11,19 +11,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Notifier {
+class Digifix_TC_Notifier {
 
 	const ALERTS = array( 'backup.failed', 'update.failed', 'update.rolled_back', 'update.restored', 'restore.completed', 'restore.failed', 'scan.failed', 'scan.issues_found' );
 
 	public static function notify( $event, array $data = array(), $job_id = 0 ) {
-		$s = DTC_Settings::all();
+		$s = Digifix_TC_Settings::all();
 
 		if ( $s['webhook_url'] ) {
 			$payload = $data;
 			if ( 'report.monthly' === $event ) {
 				$payload = array( 'report' => array_diff_key( $data['report'], array( 'events' => 1 ) ) );
 			}
-			DTC_Webhook::send( $event, $payload, $job_id );
+			Digifix_TC_Webhook::send( $event, $payload, $job_id );
 		}
 
 		$to = self::recipients( $event, $data );
@@ -34,24 +34,24 @@ class DTC_Notifier {
 		$mail        = self::compose( $event, $data );
 		$attachments = array();
 		if ( 'report.monthly' === $event && $s['monthly_attach_pdf'] ) {
-			$pdf = DTC_PDF::generate( $data['report'] );
+			$pdf = Digifix_TC_PDF::generate( $data['report'] );
 			if ( $pdf ) {
 				$attachments[] = $pdf;
 			}
 		}
 
-		$sent = DTC_Email::send( $to, $mail['subject'], $mail, $attachments );
+		$sent = Digifix_TC_Email::send( $to, $mail['subject'], $mail, $attachments );
 		if ( ! $sent ) {
-			DTC_Logger::log( 'report', 'warning', 'report.email_failed', 'Could not send "' . $mail['subject'] . '" email (wp_mail returned false).', array( 'to' => $to ), $job_id );
+			Digifix_TC_Logger::log( 'report', 'warning', 'report.email_failed', 'Could not send "' . $mail['subject'] . '" email (wp_mail returned false).', array( 'to' => $to ), $job_id );
 		} elseif ( 'report.monthly' === $event ) {
-			DTC_Logger::log( 'report', 'success', 'report.monthly_sent', 'Monthly report sent to ' . implode( ', ', $to ) . '.', array( 'period' => $data['report']['period']['label'] ), $job_id );
+			Digifix_TC_Logger::log( 'report', 'success', 'report.monthly_sent', 'Monthly report sent to ' . implode( ', ', $to ) . '.', array( 'period' => $data['report']['period']['label'] ), $job_id );
 		}
 	}
 
 	private static function recipients( $event, array $data ) {
-		$s        = DTC_Settings::all();
-		$internal = DTC_Settings::emails( 'internal_emails' );
-		$client   = DTC_Settings::emails( 'client_emails' );
+		$s        = Digifix_TC_Settings::all();
+		$internal = Digifix_TC_Settings::emails( 'internal_emails' );
+		$client   = Digifix_TC_Settings::emails( 'client_emails' );
 
 		if ( in_array( $event, self::ALERTS, true ) ) {
 			return $s['email_failures'] ? $internal : array();
@@ -179,7 +179,7 @@ class DTC_Notifier {
 					'Website care report',
 					'info',
 					sprintf( 'Here is the maintenance summary for %s for %s.', $site, $r['period']['label'] ),
-					DTC_Report_Builder::email_sections( $r )
+					Digifix_TC_Report_Builder::email_sections( $r )
 				);
 
 			case 'test':

@@ -1,6 +1,6 @@
 <?php
 /**
- * Event log stored in {prefix}dtc_events. Feeds the dashboard, the activity
+ * Event log stored in {prefix}digifix_tc_events. Feeds the dashboard, the activity
  * log and the reports.
  */
 
@@ -8,11 +8,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Logger {
+// TotalCare's own job and activity-log tables. Job state changes between requests, so these
+// queries must not be served from the object cache.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+class Digifix_TC_Logger {
 
 	public static function table() {
 		global $wpdb;
-		return $wpdb->prefix . 'dtc_events';
+		return $wpdb->prefix . 'digifix_tc_events';
 	}
 
 	/**
@@ -84,10 +88,11 @@ class DTC_Logger {
 		$offset = ( max( 1, (int) $args['page'] ) - 1 ) * $limit;
 		$sql   .= $wpdb->prepare( ' LIMIT %d OFFSET %d', $limit, $offset );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared
+		// The WHERE clause is built only from the fixed fragments above; every value is bound through prepare().
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 		$rows  = $params ? $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A ) : $wpdb->get_results( $sql, ARRAY_A );
 		$total = (int) ( $params ? $wpdb->get_var( $wpdb->prepare( $count, $params ) ) : $wpdb->get_var( $count ) );
-		// phpcs:enable
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
 		foreach ( $rows as &$row ) {
 			$row['context'] = json_decode( (string) $row['context'], true ) ?: array();
@@ -110,7 +115,6 @@ class DTC_Logger {
 
 	public static function prune( $days = 400 ) {
 		global $wpdb;
-		$table = self::table();
-		$wpdb->query( $wpdb->prepare( "DELETE FROM $table WHERE created_at < %s", gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE created_at < %s', self::table(), gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) );
 	}
 }

@@ -8,12 +8,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Jobs {
+// TotalCare's own job and activity-log tables. Job state changes between requests, so these
+// queries must not be served from the object cache.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+class Digifix_TC_Jobs {
 
 	/** A step that is killed this many times in a row without progress fails. */
 	const MAX_KILLED = 5;
 
-	/** @var array<string,object> type => handler with run(DTC_Job) and max_age(). */
+	/** @var array<string,object> type => handler with run(Digifix_TC_Job) and max_age(). */
 	private static $handlers = array();
 
 	/** @var float Absolute time the current tick must stop working. */
@@ -24,12 +28,12 @@ class DTC_Jobs {
 	 * so a host that kills PHP after ~30 s does not interrupt them.
 	 */
 	public static function deadline() {
-		return self::$deadline ? self::$deadline : microtime( true ) + DTC_Bk_Util::budget();
+		return self::$deadline ? self::$deadline : microtime( true ) + Digifix_TC_Bk_Util::budget();
 	}
 
 	public static function table() {
 		global $wpdb;
-		return $wpdb->prefix . 'dtc_jobs';
+		return $wpdb->prefix . 'digifix_tc_jobs';
 	}
 
 	public static function register( $type, $handler ) {
@@ -39,7 +43,7 @@ class DTC_Jobs {
 	/**
 	 * Queue a job. Returns the existing job if one of the same type is active.
 	 *
-	 * @return DTC_Job|null
+	 * @return Digifix_TC_Job|null
 	 */
 	public static function create( $type, array $state = array(), $step = 'start' ) {
 		global $wpdb;
@@ -66,39 +70,36 @@ class DTC_Jobs {
 		return self::find( (int) $wpdb->insert_id );
 	}
 
-	/** @return DTC_Job|null */
+	/** @return Digifix_TC_Job|null */
 	public static function find( $id ) {
 		global $wpdb;
-		$table = self::table();
-		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $id ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		return $row ? new DTC_Job( $row ) : null;
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', self::table(), $id ), ARRAY_A );
+		return $row ? new Digifix_TC_Job( $row ) : null;
 	}
 
-	/** @return DTC_Job[] */
+	/** @return Digifix_TC_Job[] */
 	public static function active() {
 		global $wpdb;
-		$table = self::table();
-		$rows  = $wpdb->get_results( "SELECT * FROM $table WHERE status IN ('pending','running') ORDER BY id ASC", ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM %i WHERE status IN ('pending','running') ORDER BY id ASC", self::table() ), ARRAY_A );
 		return array_map(
 			function ( $row ) {
-				return new DTC_Job( $row );
+				return new Digifix_TC_Job( $row );
 			},
 			$rows ?: array()
 		);
 	}
 
-	/** @return DTC_Job[] */
+	/** @return Digifix_TC_Job[] */
 	public static function recent( $type = '', $limit = 10 ) {
 		global $wpdb;
-		$table = self::table();
-		$sql   = $type
-			? $wpdb->prepare( "SELECT * FROM $table WHERE type = %s ORDER BY id DESC LIMIT %d", $type, $limit ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			: $wpdb->prepare( "SELECT * FROM $table ORDER BY id DESC LIMIT %d", $limit ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $type
+			? $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE type = %s ORDER BY id DESC LIMIT %d', self::table(), $type, $limit ), ARRAY_A )
+			: $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i ORDER BY id DESC LIMIT %d', self::table(), $limit ), ARRAY_A );
 		return array_map(
 			function ( $row ) {
-				return new DTC_Job( $row );
+				return new Digifix_TC_Job( $row );
 			},
-			$wpdb->get_results( $sql, ARRAY_A ) ?: array() // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$rows ?: array()
 		);
 	}
 
@@ -106,26 +107,26 @@ class DTC_Jobs {
 		$job = self::find( $id );
 		if ( $job && $job->is_active() ) {
 			$job->finish( 'cancelled', 'Cancelled by ' . ( wp_get_current_user()->user_login ?: 'system' ) );
-			DTC_Logger::log( $job->type, 'warning', $job->type . '.cancelled', 'Job #' . $job->id . ' cancelled.', array(), $job->id );
+			Digifix_TC_Logger::log( $job->type, 'warning', $job->type . '.cancelled', 'Job #' . $job->id . ' cancelled.', array(), $job->id );
 			self::cleanup( $job );
 		}
 	}
 
 	/** Let the handler release what a stopped job left behind (uploads, files). */
-	private static function cleanup( DTC_Job $job ) {
+	private static function cleanup( Digifix_TC_Job $job ) {
 		$handler = self::$handlers[ $job->type ] ?? null;
 		if ( $handler && method_exists( $handler, 'cleanup' ) ) {
 			try {
 				$handler->cleanup( $job );
 			} catch ( Throwable $e ) {
-				DTC_Logger::log( $job->type, 'warning', $job->type . '.cleanup_failed', 'Cleanup after job #' . $job->id . ' failed: ' . $e->getMessage(), array(), $job->id );
+				Digifix_TC_Logger::log( $job->type, 'warning', $job->type . '.cleanup_failed', 'Cleanup after job #' . $job->id . ' failed: ' . wp_specialchars_decode( $e->getMessage(), ENT_QUOTES ), array(), $job->id );
 			}
 		}
 	}
 
 	/** Kick the engine immediately through a loopback request. */
 	public static function kick() {
-		DTC_Storage::loopback( 'dtc_kick' );
+		Digifix_TC_Storage::loopback( 'digifix_tc_kick' );
 	}
 
 	/**
@@ -134,7 +135,7 @@ class DTC_Jobs {
 	 */
 	private static function lock_name() {
 		global $wpdb;
-		return 'dtc_tick_' . substr( md5( DB_NAME . $wpdb->prefix ), 0, 16 );
+		return 'digifix_tc_tick_' . substr( md5( DB_NAME . $wpdb->prefix ), 0, 16 );
 	}
 
 	private static function acquire_lock() {
@@ -151,20 +152,20 @@ class DTC_Jobs {
 	 * Advance the head-of-queue job until the request budget is used up.
 	 */
 	public static function tick() {
-		update_option( 'dtc_last_tick', time(), false );
+		update_option( 'digifix_tc_last_tick', time(), false );
 
 		// A guardian restore finished while TotalCare was deactivated.
-		DTC_Restore::reconcile();
+		Digifix_TC_Restore::reconcile();
 
-		if ( DTC_Restore::in_progress() ) {
+		if ( Digifix_TC_Restore::in_progress() ) {
 			return;
 		}
 		if ( ! self::acquire_lock() ) {
 			return;
 		}
 
-		DTC_Bk_Util::extend_time_limit();
-		$budget         = DTC_Bk_Util::budget();
+		Digifix_TC_Bk_Util::extend_time_limit();
+		$budget         = Digifix_TC_Bk_Util::budget();
 		self::$deadline = microtime( true ) + $budget;
 		$more           = false;
 		try {
@@ -179,11 +180,11 @@ class DTC_Jobs {
 					break;
 				}
 				self::run_step( $job );
-				if ( DTC_Restore::in_progress() ) {
+				if ( Digifix_TC_Restore::in_progress() ) {
 					break;
 				}
 			}
-			$active = DTC_Restore::in_progress() ? array() : self::active();
+			$active = Digifix_TC_Restore::in_progress() ? array() : self::active();
 			$more   = $active && $active[0]->next_run_at <= time();
 		} finally {
 			self::release_lock();
@@ -192,12 +193,12 @@ class DTC_Jobs {
 
 		// Work is waiting: continue in a fresh request instead of waiting
 		// for the next cron minute. Low impact mode leaves that pause in.
-		if ( $more && empty( DTC_Settings::get( 'low_impact' ) ) ) {
+		if ( $more && empty( Digifix_TC_Settings::get( 'low_impact' ) ) ) {
 			self::kick();
 		}
 	}
 
-	private static function run_step( DTC_Job $job ) {
+	private static function run_step( Digifix_TC_Job $job ) {
 		$handler = self::$handlers[ $job->type ] ?? null;
 		if ( ! $handler ) {
 			$job->fail( 'No handler registered for job type ' . $job->type );
@@ -206,8 +207,8 @@ class DTC_Jobs {
 
 		if ( $job->age() > $handler->max_age() ) {
 			$job->fail( 'Job exceeded its maximum run time at step "' . $job->step . '".' );
-			DTC_Logger::log( $job->type, 'error', $job->type . '.timeout', $job->message, array( 'step' => $job->step ), $job->id );
-			DTC_Notifier::notify( $job->type . '.failed', array( 'error' => $job->message ), $job->id );
+			Digifix_TC_Logger::log( $job->type, 'error', $job->type . '.timeout', $job->message, array( 'step' => $job->step ), $job->id );
+			Digifix_TC_Notifier::notify( $job->type . '.failed', array( 'error' => $job->message ), $job->id );
 			self::cleanup( $job );
 			return;
 		}
@@ -218,8 +219,8 @@ class DTC_Jobs {
 		if ( $entries > self::MAX_KILLED ) {
 			$msg = 'Step "' . $job->step . '" was stopped by the server ' . self::MAX_KILLED . ' times in a row (PHP time or memory limit). Try a smaller "Work per request" setting.';
 			$job->fail( $msg );
-			DTC_Logger::log( $job->type, 'error', $job->type . '.failed', $msg, array( 'step' => $job->step ), $job->id );
-			DTC_Notifier::notify( $job->type . '.failed', array( 'error' => $msg ), $job->id );
+			Digifix_TC_Logger::log( $job->type, 'error', $job->type . '.failed', $msg, array( 'step' => $job->step ), $job->id );
+			Digifix_TC_Notifier::notify( $job->type . '.failed', array( 'error' => $msg ), $job->id );
 			self::cleanup( $job );
 			return;
 		}
@@ -236,12 +237,12 @@ class DTC_Jobs {
 			$handler->run( $job );
 		} catch ( Throwable $e ) {
 			++$job->attempts;
-			$msg = sprintf( 'Step "%s" threw %s: %s', $job->step, get_class( $e ), $e->getMessage() );
+			$msg = sprintf( 'Step "%s" threw %s: %s', $job->step, get_class( $e ), wp_specialchars_decode( $e->getMessage(), ENT_QUOTES ) );
 			$job->set( '_entries', 0 );
 			if ( $job->attempts >= 3 ) {
 				$job->fail( $msg );
-				DTC_Logger::log( $job->type, 'error', $job->type . '.failed', $msg, array( 'step' => $job->step ), $job->id );
-				DTC_Notifier::notify( $job->type . '.failed', array( 'error' => $msg ), $job->id );
+				Digifix_TC_Logger::log( $job->type, 'error', $job->type . '.failed', $msg, array( 'step' => $job->step ), $job->id );
+				Digifix_TC_Notifier::notify( $job->type . '.failed', array( 'error' => $msg ), $job->id );
 				self::cleanup( $job );
 			} else {
 				$job->next_run_at = time() + 60;
@@ -262,7 +263,6 @@ class DTC_Jobs {
 
 	public static function prune( $days = 120 ) {
 		global $wpdb;
-		$table = self::table();
-		$wpdb->query( $wpdb->prepare( "DELETE FROM $table WHERE status NOT IN ('pending','running') AND created_at < %s", gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( $wpdb->prepare( "DELETE FROM %i WHERE status NOT IN ('pending','running') AND created_at < %s", self::table(), gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) );
 	}
 }

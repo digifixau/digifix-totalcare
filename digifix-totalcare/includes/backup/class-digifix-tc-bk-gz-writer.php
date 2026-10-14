@@ -17,14 +17,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Exception extends Exception {}
+class Digifix_TC_Bk_Exception extends Exception {}
 
-class DTC_Bk_Gz_Writer {
+class Digifix_TC_Bk_Gz_Writer {
 
 	const MAX_MEMBER_COMPRESSED = 16777216; // 16 MiB: one member fits one restore request.
 	const MAX_MEMBER_RAW        = 67108864; // 64 MiB.
 
-	/** @var DTC_Bk_S3 */
+	/** @var Digifix_TC_Bk_S3 */
 	private $s3;
 	private $dir;
 	private $name;
@@ -41,7 +41,7 @@ class DTC_Bk_Gz_Writer {
 	private $seg_fh;
 	private $uploaded = array(); // Segment files uploaded this request; deleted after commit.
 
-	public function __construct( DTC_Bk_S3 $s3, $dir, $name, $key, array $state = null ) {
+	public function __construct( Digifix_TC_Bk_S3 $s3, $dir, $name, $key, array $state = null ) {
 		$this->s3    = $s3;
 		$this->dir   = $dir;
 		$this->name  = $name;
@@ -82,14 +82,14 @@ class DTC_Bk_Gz_Writer {
 			return;
 		}
 		$n = (int) $this->state['seg_n'];
-		if ( ! DTC_Bk_Util::truncate( $this->seg_file( $n ), $this->state['seg_len'] ) ) {
-			throw new DTC_Bk_Exception( 'Local spool file for ' . $this->name . ' is missing or shorter than expected; the backup has to start again.' );
+		if ( ! Digifix_TC_Bk_Util::truncate( $this->seg_file( $n ), $this->state['seg_len'] ) ) {
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Local spool file for ' . $this->name . ' is missing or shorter than expected; the backup has to start again.' ) );
 		}
 		for ( $i = $n + 1; file_exists( $this->seg_file( $i ) ); $i++ ) {
-			@unlink( $this->seg_file( $i ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $this->seg_file( $i ) );
 		}
-		if ( ! DTC_Bk_Util::truncate( $this->members_file(), $this->state['mfile_len'] ) ) {
-			throw new DTC_Bk_Exception( 'Local member index for ' . $this->name . ' is missing; the backup has to start again.' );
+		if ( ! Digifix_TC_Bk_Util::truncate( $this->members_file(), $this->state['mfile_len'] ) ) {
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Local member index for ' . $this->name . ' is missing; the backup has to start again.' ) );
 		}
 	}
 
@@ -124,7 +124,7 @@ class DTC_Bk_Gz_Writer {
 	 */
 	public function begin_member( $level, array $meta = array() ) {
 		if ( $this->ctx ) {
-			throw new DTC_Bk_Exception( 'Member already open.' );
+			throw new Digifix_TC_Bk_Exception( 'Member already open.' );
 		}
 		$this->ctx     = deflate_init( ZLIB_ENCODING_GZIP, array( 'level' => (int) $level ) );
 		$this->hash    = hash_init( 'sha256' );
@@ -133,13 +133,13 @@ class DTC_Bk_Gz_Writer {
 		$this->m_level = (int) $level;
 		$this->m_meta  = $meta;
 		if ( ! $this->ctx ) {
-			throw new DTC_Bk_Exception( 'zlib deflate_init() failed.' );
+			throw new Digifix_TC_Bk_Exception( 'zlib deflate_init() failed.' );
 		}
 	}
 
 	public function write( $raw ) {
 		if ( ! $this->ctx ) {
-			throw new DTC_Bk_Exception( 'No open member.' );
+			throw new Digifix_TC_Bk_Exception( 'No open member.' );
 		}
 		$len = strlen( $raw );
 		if ( ! $len ) {
@@ -173,9 +173,9 @@ class DTC_Bk_Gz_Writer {
 			),
 			array_values( $this->m_meta )
 		);
-		$line = DTC_Bk_Util::tsv_row( $row );
+		$line = Digifix_TC_Bk_Util::tsv_row( $row );
 		if ( false === file_put_contents( $this->members_file(), $line, FILE_APPEND ) ) {
-			throw new DTC_Bk_Exception( 'Could not write ' . $this->members_file() );
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Could not write ' . $this->members_file() ) );
 		}
 		$this->state['mfile_len'] += strlen( $line );
 		$this->state['total']     += $this->m_comp;
@@ -197,18 +197,18 @@ class DTC_Bk_Gz_Writer {
 			if ( ! $this->seg_fh ) {
 				$this->seg_fh = fopen( $this->seg_file( $this->state['seg_n'] ), 'ab' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 				if ( ! $this->seg_fh ) {
-					throw new DTC_Bk_Exception( 'Cannot write to the backup work folder (disk full or not writable).' );
+					throw new Digifix_TC_Bk_Exception( 'Cannot write to the backup work folder (disk full or not writable).' );
 				}
 			}
-			$room  = DTC_Bk_S3::PART_SIZE - (int) $this->state['seg_len'];
+			$room  = Digifix_TC_Bk_S3::PART_SIZE - (int) $this->state['seg_len'];
 			$chunk = strlen( $bytes ) > $room ? substr( $bytes, 0, $room ) : $bytes;
 			if ( fwrite( $this->seg_fh, $chunk ) !== strlen( $chunk ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
-				throw new DTC_Bk_Exception( 'Write to the backup work folder failed (disk full?).' );
+				throw new Digifix_TC_Bk_Exception( 'Write to the backup work folder failed (disk full?).' );
 			}
 			$this->state['seg_len'] += strlen( $chunk );
 			$bytes                   = (string) substr( $bytes, strlen( $chunk ) );
 
-			if ( (int) $this->state['seg_len'] >= DTC_Bk_S3::PART_SIZE ) {
+			if ( (int) $this->state['seg_len'] >= Digifix_TC_Bk_S3::PART_SIZE ) {
 				$this->upload_segment();
 			}
 		}
@@ -222,13 +222,13 @@ class DTC_Bk_Gz_Writer {
 		if ( '' === $this->state['upload_id'] ) {
 			$id = $this->s3->multipart_create( $this->state['key'], 'application/gzip' );
 			if ( is_wp_error( $id ) ) {
-				throw new DTC_Bk_Exception( $id->get_error_message() );
+				throw new Digifix_TC_Bk_Exception( esc_html( $id->get_error_message() ) );
 			}
 			$this->state['upload_id'] = $id;
 		}
 		$etag = $this->s3->multipart_part( $this->state['key'], $this->state['upload_id'], $n, $this->seg_file( $n ) );
 		if ( is_wp_error( $etag ) ) {
-			throw new DTC_Bk_Exception( $etag->get_error_message() );
+			throw new Digifix_TC_Bk_Exception( esc_html( $etag->get_error_message() ) );
 		}
 		$this->state['etags'][ $n ] = $etag;
 		$this->uploaded[]           = $this->seg_file( $n );
@@ -239,7 +239,7 @@ class DTC_Bk_Gz_Writer {
 	/** Call after the caller has persisted state(). */
 	public function after_commit() {
 		foreach ( $this->uploaded as $file ) {
-			@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $file );
 		}
 		$this->uploaded = array();
 	}
@@ -254,7 +254,7 @@ class DTC_Bk_Gz_Writer {
 			return $this->summary();
 		}
 		if ( $this->ctx ) {
-			throw new DTC_Bk_Exception( 'finish() with an open member.' );
+			throw new Digifix_TC_Bk_Exception( 'finish() with an open member.' );
 		}
 		if ( $this->seg_fh ) {
 			fclose( $this->seg_fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
@@ -287,12 +287,12 @@ class DTC_Bk_Gz_Writer {
 			}
 		}
 		if ( is_wp_error( $res ) ) {
-			throw new DTC_Bk_Exception( $res->get_error_message() );
+			throw new Digifix_TC_Bk_Exception( esc_html( $res->get_error_message() ) );
 		}
 
 		$head = $this->s3->head( $this->state['key'] );
 		if ( is_array( $head ) && (int) $head['size'] !== (int) $this->state['total'] ) {
-			throw new DTC_Bk_Exception( 'Uploaded ' . $this->state['key'] . ' has ' . $head['size'] . ' bytes, expected ' . $this->state['total'] . '.' );
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Uploaded ' . $this->state['key'] . ' has ' . $head['size'] . ' bytes, expected ' . $this->state['total'] . '.' ) );
 		}
 		// Deleted only after the caller saved the finished state: if this
 		// request dies first, the next one needs the file again.
@@ -311,7 +311,7 @@ class DTC_Bk_Gz_Writer {
 	}
 
 	/** Abort an unfinished upload and remove local files. */
-	public static function abort_state( DTC_Bk_S3 $s3, array $state ) {
+	public static function abort_state( Digifix_TC_Bk_S3 $s3, array $state ) {
 		if ( empty( $state['finished'] ) && ! empty( $state['upload_id'] ) ) {
 			$s3->multipart_abort( $state['key'], $state['upload_id'] );
 		}

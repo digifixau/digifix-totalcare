@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Wordfence {
+class Digifix_TC_Wordfence {
 
 	const TESTED_UP_TO = '9.0.2';
 
@@ -48,13 +48,13 @@ class DTC_Wordfence {
 	 */
 	public static function start( $type ) {
 		if ( ! self::is_available() ) {
-			return new WP_Error( 'dtc_wordfence', 'Wordfence is not active.' );
+			return new WP_Error( 'digifix_tc_wordfence', 'Wordfence is not active.' );
 		}
 		$mode = 'quick' === $type ? wfScanner::SCAN_TYPE_QUICK : wfScanner::SCAN_TYPE_STANDARD;
 		try {
 			$result = wfScanEngine::startScan( false, $mode );
 			if ( is_string( $result ) && '' !== $result ) {
-				return new WP_Error( 'dtc_wordfence', wp_strip_all_tags( $result ) );
+				return new WP_Error( 'digifix_tc_wordfence', wp_strip_all_tags( $result ) );
 			}
 		} catch ( Exception $e ) {
 			// Mirror Wordfence's own error handling so its UI stays consistent.
@@ -65,7 +65,7 @@ class DTC_Wordfence {
 					wfUtils::clearScanLock();
 				}
 			}
-			return new WP_Error( 'dtc_wordfence', 'Wordfence could not start the scan: ' . $e->getMessage() );
+			return new WP_Error( 'digifix_tc_wordfence', 'Wordfence could not start the scan: ' . $e->getMessage() );
 		}
 		return true;
 	}

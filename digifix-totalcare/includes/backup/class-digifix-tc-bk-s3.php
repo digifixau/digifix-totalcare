@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_S3 {
+class Digifix_TC_Bk_S3 {
 
 	const PART_SIZE = 8388608; // 8 MiB. R2 needs equal part sizes (except the last).
 
@@ -98,7 +98,7 @@ class DTC_Bk_S3 {
 		}
 		$region     = $this->region();
 		$path_style = false !== strpos( $bucket, '.' );
-		$base       = 's3.' . $region . '.amazonaws.com';
+		$base       = 's3.' . $region . '.amazonaws.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- S3 API endpoint of the user's own backup bucket, not hosted assets.
 		return array(
 			'scheme'     => 'https',
 			'host'       => $path_style ? $base : $bucket . '.' . $base,
@@ -232,7 +232,7 @@ class DTC_Bk_S3 {
 				'timeout'     => $opts['timeout'] ?? 60,
 				'redirection' => 0,
 				'decompress'  => false,
-				'user-agent'  => 'DigifixTotalCare/' . ( defined( 'DTC_VERSION' ) ? DTC_VERSION : '1' ),
+				'user-agent'  => 'DigifixTotalCare/' . ( defined( 'DIGIFIX_TC_VERSION' ) ? DIGIFIX_TC_VERSION : '1' ),
 			);
 			if ( ! empty( $opts['filename'] ) ) {
 				$args['stream']   = true;
@@ -249,7 +249,7 @@ class DTC_Bk_S3 {
 					sleep( $attempt );
 					continue;
 				}
-				return new WP_Error( 'dtc_s3', 'S3 request failed: ' . $res->get_error_message() );
+				return new WP_Error( 'digifix_tc_s3', 'S3 request failed: ' . $res->get_error_message() );
 			}
 
 			$code     = (int) wp_remote_retrieve_response_code( $res );
@@ -293,7 +293,7 @@ class DTC_Bk_S3 {
 		if ( 301 === $code && 'amazons3' === $this->cfg['type'] ) {
 			$msg = 'The bucket is in a different region. Save the settings again to detect it. ' . $msg;
 		}
-		return new WP_Error( 'dtc_s3', trim( 'S3 error ' . $code . ( $err ? ' ' . $err : '' ) . ( $msg ? ': ' . $msg : '' ) ), array( 'code' => $code, 's3_code' => $err ) );
+		return new WP_Error( 'digifix_tc_s3', trim( 'S3 error ' . $code . ( $err ? ' ' . $err : '' ) . ( $msg ? ': ' . $msg : '' ) ), array( 'code' => $code, 's3_code' => $err ) );
 	}
 
 	private static function xml_value( $xml, $tag ) {
@@ -323,7 +323,7 @@ class DTC_Bk_S3 {
 	 * x-amz-bucket-region header even for 301/403 responses).
 	 */
 	public static function detect_region( $bucket ) {
-		$url = false !== strpos( $bucket, '.' ) ? 'https://s3.amazonaws.com/' . rawurlencode( $bucket ) : 'https://' . $bucket . '.s3.amazonaws.com/';
+		$url = false !== strpos( $bucket, '.' ) ? 'https://s3.amazonaws.com/' . rawurlencode( $bucket ) : 'https://' . $bucket . '.s3.amazonaws.com/'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- S3 API endpoint of the user's own backup bucket, not hosted assets.
 		$res = wp_remote_head( $url, array( 'timeout' => 15, 'redirection' => 0 ) );
 		if ( is_wp_error( $res ) ) {
 			return '';
@@ -364,10 +364,10 @@ class DTC_Bk_S3 {
 		if ( null !== $start ) {
 			$want = (int) $end - (int) $start + 1;
 			if ( 206 !== $res['code'] && ! ( 200 === $res['code'] && 0 === (int) $start ) ) {
-				return new WP_Error( 'dtc_s3', 'The storage service ignored the byte range request (HTTP ' . $res['code'] . ').' );
+				return new WP_Error( 'digifix_tc_s3', 'The storage service ignored the byte range request (HTTP ' . $res['code'] . ').' );
 			}
 			if ( filesize( $file ) !== $want ) {
-				return new WP_Error( 'dtc_s3', 'Short download for ' . $key . ': got ' . filesize( $file ) . ' of ' . $want . ' bytes.' );
+				return new WP_Error( 'digifix_tc_s3', 'Short download for ' . $key . ': got ' . filesize( $file ) . ' of ' . $want . ' bytes.' );
 			}
 		}
 		return true;
@@ -480,7 +480,7 @@ class DTC_Bk_S3 {
 				continue;
 			}
 			if ( false !== strpos( $res['body'], '<Error>' ) ) {
-				return new WP_Error( 'dtc_s3', 'Some objects could not be deleted: ' . self::xml_value( $res['body'], 'Message' ) );
+				return new WP_Error( 'digifix_tc_s3', 'Some objects could not be deleted: ' . self::xml_value( $res['body'], 'Message' ) );
 			}
 		}
 		return true;
@@ -496,7 +496,7 @@ class DTC_Bk_S3 {
 			return $res;
 		}
 		$id = self::xml_value( $res['body'], 'UploadId' );
-		return '' !== $id ? $id : new WP_Error( 'dtc_s3', 'No UploadId in the multipart response.' );
+		return '' !== $id ? $id : new WP_Error( 'digifix_tc_s3', 'No UploadId in the multipart response.' );
 	}
 
 	/** Upload one part from a local file. @return string|WP_Error ETag. */
@@ -519,7 +519,7 @@ class DTC_Bk_S3 {
 			return $res;
 		}
 		$etag = self::header( $res['headers'], 'etag' );
-		return '' !== $etag ? $etag : new WP_Error( 'dtc_s3', 'No ETag for part ' . $number . '.' );
+		return '' !== $etag ? $etag : new WP_Error( 'digifix_tc_s3', 'No ETag for part ' . $number . '.' );
 	}
 
 	/** @param array $etags part number => ETag. */

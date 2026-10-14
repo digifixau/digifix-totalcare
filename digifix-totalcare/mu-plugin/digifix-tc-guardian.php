@@ -2,12 +2,12 @@
 /**
  * Plugin Name: Digifix TotalCare Guardian
  * Description: Safety net for Digifix TotalCare. Records PHP fatal errors, rolls back a plugin/theme update that crashes the site, and drives site restores before other plugins load. Installed and removed automatically by Digifix TotalCare.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Digifix
  *
  * This file must stay self-contained: it runs when a broken plugin crashes
  * every request, and drives restores before regular plugins and the theme
- * load (TotalCare's engine is loaded from a pinned copy in dtc-data).
+ * load (TotalCare's engine is loaded from a pinned copy in digifix-tc-data).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -15,13 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Can be loaded from mu-plugins or from the fatal-error-handler.php drop-in.
-if ( defined( 'DTC_GUARDIAN_VERSION' ) ) {
+if ( defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) ) {
 	return;
 }
 
-define( 'DTC_GUARDIAN_VERSION', '1.1.0' );
+define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.0' );
 
-final class DTC_Guardian {
+final class Digifix_TC_Guardian {
 
 	const FATAL_TYPES = array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR );
 	const ACTIVE      = array( 'pending', 'running', 'finishing', 'failing' );
@@ -37,10 +37,10 @@ final class DTC_Guardian {
 		add_filter( 'wp_php_error_message', array( __CLASS__, 'on_wp_fatal' ), 1, 2 );
 		register_shutdown_function( array( __CLASS__, 'on_shutdown' ) );
 
-		add_action( 'wp_ajax_dtc_guardian_health', array( __CLASS__, 'ajax_health' ) );
-		add_action( 'wp_ajax_nopriv_dtc_guardian_health', array( __CLASS__, 'ajax_health' ) );
-		add_action( 'wp_ajax_dtc_guardian_restore', array( __CLASS__, 'ajax_restore' ) );
-		add_action( 'wp_ajax_nopriv_dtc_guardian_restore', array( __CLASS__, 'ajax_restore' ) );
+		add_action( 'wp_ajax_digifix_tc_guardian_health', array( __CLASS__, 'ajax_health' ) );
+		add_action( 'wp_ajax_nopriv_digifix_tc_guardian_health', array( __CLASS__, 'ajax_health' ) );
+		add_action( 'wp_ajax_digifix_tc_guardian_restore', array( __CLASS__, 'ajax_restore' ) );
+		add_action( 'wp_ajax_nopriv_digifix_tc_guardian_restore', array( __CLASS__, 'ajax_restore' ) );
 
 		add_filter( 'wpvivid_enable_plugins_list', array( __CLASS__, 'keep_totalcare_active' ) );
 		add_action( 'init', array( __CLASS__, 'watchdog' ), 1 );
@@ -57,11 +57,11 @@ final class DTC_Guardian {
 	}
 
 	/* ---------------------------------------------------------------------
-	 * File storage (mirrors DTC_Storage)
+	 * File storage (mirrors Digifix_TC_Storage)
 	 * ------------------------------------------------------------------ */
 
 	private static function dir() {
-		return WP_CONTENT_DIR . '/dtc-data';
+		return WP_CONTENT_DIR . '/digifix-tc-data';
 	}
 
 	private static function read( $name ) {
@@ -75,16 +75,16 @@ final class DTC_Guardian {
 
 	private static function write( $name, $data ) {
 		if ( ! is_dir( self::dir() ) ) {
-			@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 		}
 		$file = self::dir() . '/' . $name . '.json';
 		$json = json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
 		if ( false === $json ) {
 			return; // Never replace the file with an empty one.
 		}
-		$tmp = $file . '.' . getmypid() . '.' . mt_rand() . '.tmp';
+		$tmp = $file . '.' . getmypid() . '.' . mt_rand() . '.tmp'; // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand
 		if ( false !== @file_put_contents( $tmp, $json ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			@rename( $tmp, $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@rename( $tmp, $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename
 		}
 	}
 
@@ -116,7 +116,7 @@ final class DTC_Guardian {
 			array(
 				'timeout'   => 1,
 				'blocking'  => false,
-				'sslverify' => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's filter for requests to this site itself.
 				'body'      => array_merge(
 					$extra,
 					array(
@@ -172,7 +172,7 @@ final class DTC_Guardian {
 
 		$req     = self::read( 'restore-request' );
 		$legacy  = 'totalcare' !== ( $req['engine'] ?? 'wpvivid' );
-		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'dtc_guardian_restore' === $_POST['action'] ) : self::$driving; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'digifix_tc_guardian_restore' === $_POST['action'] ) : self::$driving; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		if ( $req && in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing' ), true ) && $restore ) {
 			$req['errors'] = (int) ( $req['errors'] ?? 0 ) + 1;
 			$req['error']  = 'PHP fatal during restore: ' . $entry['message'] . ' in ' . $entry['file'] . ':' . $entry['line'];
@@ -183,7 +183,7 @@ final class DTC_Guardian {
 			self::write( 'restore-request', $req );
 			// Continue (or fail) in a fresh request; this one is about to die.
 			self::unlock();
-			self::loopback( 'dtc_guardian_restore', $legacy ? array( 'wpvivid_restore' => 1 ) : array() );
+			self::loopback( 'digifix_tc_guardian_restore', $legacy ? array( 'wpvivid_restore' => 1 ) : array() );
 		}
 	}
 
@@ -206,13 +206,13 @@ final class DTC_Guardian {
 			return;
 		}
 
-		$failed = $source . '.dtc-failed-' . time();
-		if ( file_exists( $source ) && ! @rename( $source, $failed ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$failed = $source . '.digifix-tc-failed-' . time();
+		if ( file_exists( $source ) && ! @rename( $source, $failed ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename
 			return;
 		}
 		$ok = is_dir( $snapshot ) ? self::copy_dir( $snapshot, $source ) : @copy( $snapshot, $source ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( ! $ok ) {
-			@rename( $failed, $source ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@rename( $failed, $source ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename
 			return;
 		}
 		if ( function_exists( 'opcache_reset' ) ) {
@@ -227,14 +227,14 @@ final class DTC_Guardian {
 	}
 
 	private static function copy_dir( $src, $dst ) {
-		if ( ! is_dir( $dst ) && ! @mkdir( $dst, 0755, true ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! is_dir( $dst ) && ! @mkdir( $dst, 0755, true ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 			return false;
 		}
 		$it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $src, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::SELF_FIRST );
 		foreach ( $it as $item ) {
 			$target = $dst . '/' . substr( $item->getPathname(), strlen( $src ) + 1 );
 			if ( $item->isDir() ) {
-				if ( ! is_dir( $target ) && ! @mkdir( $target, 0755, true ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				if ( ! is_dir( $target ) && ! @mkdir( $target, 0755, true ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 					return false;
 				}
 			} elseif ( ! @copy( $item->getPathname(), $target ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
@@ -249,7 +249,7 @@ final class DTC_Guardian {
 	 * ------------------------------------------------------------------ */
 
 	public static function ajax_health() {
-		if ( ! self::verify_request( 'dtc_guardian_health' ) ) {
+		if ( ! self::verify_request( 'digifix_tc_guardian_health' ) ) {
 			wp_send_json( array( 'ok' => false ), 403 );
 		}
 		$since  = isset( $_POST['since'] ) ? (int) $_POST['since'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
@@ -264,7 +264,7 @@ final class DTC_Guardian {
 		wp_send_json(
 			array(
 				'ok'       => true,
-				'version'  => DTC_GUARDIAN_VERSION,
+				'version'  => DIGIFIX_TC_GUARDIAN_VERSION,
 				'fatals'   => $fatals,
 				'inflight' => self::read( 'inflight' ),
 			)
@@ -285,7 +285,7 @@ final class DTC_Guardian {
 			return;
 		}
 		$done  = true;
-		$token = isset( $_GET['dtc_restore_status'] ) ? (string) wp_unslash( $_GET['dtc_restore_status'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$token = isset( $_GET['digifix_tc_restore_status'] ) ? (string) wp_unslash( $_GET['digifix_tc_restore_status'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		if ( ! file_exists( self::dir() . '/restore-request.json' ) ) {
 			// Progress page of a restore that has already been reconciled.
 			$last = '' !== $token ? self::read( 'restore-last' ) : null;
@@ -310,8 +310,8 @@ final class DTC_Guardian {
 		add_filter( 'automatic_updater_disabled', '__return_true', 99 );
 
 		// 1. The restore chain itself.
-		if ( defined( 'DOING_AJAX' ) && DOING_AJAX && 'dtc_guardian_restore' === ( $_POST['action'] ?? '' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-			if ( ! self::verify_request( 'dtc_guardian_restore' ) ) {
+		if ( defined( 'DOING_AJAX' ) && DOING_AJAX && 'digifix_tc_guardian_restore' === sanitize_key( wp_unslash( $_POST['action'] ?? '' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- signed loopback; verify_request() checks the HMAC.
+			if ( ! self::verify_request( 'digifix_tc_guardian_restore' ) ) {
 				self::json( array( 'ok' => false ), 403 );
 			}
 			self::json( self::drive() );
@@ -348,12 +348,12 @@ final class DTC_Guardian {
 		if ( file_exists( $marker ) && time() - filemtime( $marker ) < 60 ) {
 			return;
 		}
-		@touch( $marker ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		@touch( $marker ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_touch
 		if ( $may_run_inline && $stalled > 300 ) {
 			self::drive();
 			return;
 		}
-		self::loopback( 'dtc_guardian_restore' );
+		self::loopback( 'digifix_tc_guardian_restore' );
 	}
 
 	/** Run one restore step in this request (WP-CLI fallback). */
@@ -363,7 +363,7 @@ final class DTC_Guardian {
 
 	/** One locked step of the restore. @return array Response data. */
 	private static function drive() {
-		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 		self::$lock = fopen( self::dir() . '/restore.lock', 'c' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		if ( ! self::$lock || ! flock( self::$lock, LOCK_EX | LOCK_NB ) ) {
 			return array(
@@ -396,20 +396,20 @@ final class DTC_Guardian {
 		$loader        = rtrim( (string) ( $req['engine_dir'] ?? '' ), '/' ) . '/loader.php';
 		try {
 			if ( ! is_readable( $loader ) ) {
-				throw new Exception( 'The restore engine is missing (' . $loader . ').' );
+				throw new Exception( esc_html( 'The restore engine is missing (' . $loader . ').' ) );
 			}
 			require_once $loader;
-			DTC_Bk_Util::extend_time_limit();
-			$deadline = $started + DTC_Bk_Util::budget();
+			Digifix_TC_Bk_Util::extend_time_limit();
+			$deadline = $started + Digifix_TC_Bk_Util::budget();
 			if ( 'failing' === $req['status'] ) {
-				$req = DTC_Bk_Restore_Engine::fail( $req, $req['error'] ? $req['error'] : 'Restore failed.' );
+				$req = Digifix_TC_Bk_Restore_Engine::fail( $req, $req['error'] ? $req['error'] : 'Restore failed.' );
 			} else {
-				$req = DTC_Bk_Restore_Engine::run( $req, $deadline );
+				$req = Digifix_TC_Bk_Restore_Engine::run( $req, $deadline );
 			}
 		} catch ( Throwable $e ) {
-			$msg = $e->getMessage() . ( $e instanceof DTC_Bk_Exception ? '' : ' (' . basename( $e->getFile() ) . ':' . $e->getLine() . ')' );
-			if ( class_exists( 'DTC_Bk_Restore_Engine', false ) ) {
-				$req = DTC_Bk_Restore_Engine::fail( $req, $msg );
+			$msg = wp_specialchars_decode( $e->getMessage(), ENT_QUOTES ) . ( $e instanceof Digifix_TC_Bk_Exception ? '' : ' (' . basename( $e->getFile() ) . ':' . $e->getLine() . ')' );
+			if ( class_exists( 'Digifix_TC_Bk_Restore_Engine', false ) ) {
+				$req = Digifix_TC_Bk_Restore_Engine::fail( $req, $msg );
 			} else {
 				$req['status']      = 'failed';
 				$req['maintenance'] = false;
@@ -423,10 +423,10 @@ final class DTC_Guardian {
 		self::unlock();
 
 		if ( in_array( $req['status'], array( 'running', 'failing' ), true ) ) {
-			self::loopback( 'dtc_guardian_restore' );
+			self::loopback( 'digifix_tc_guardian_restore' );
 		} else {
 			// Let TotalCare reconcile right away (plugins load normally again).
-			self::loopback( 'dtc_kick' );
+			self::loopback( 'digifix_tc_kick' );
 		}
 		if ( ! empty( $req['maintenance'] ) || 'done' === $req['status'] ) {
 			header( 'X-LiteSpeed-Purge: *' );
@@ -480,18 +480,15 @@ final class DTC_Guardian {
 			'done'    => 'Finished',
 			'failed'  => 'Failed',
 		);
-		$e      = function ( $s ) {
-			return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' );
-		};
 		echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
 			. ( $active ? '<meta http-equiv="refresh" content="10">' : '' )
 			. '<title>Restore progress</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f7;color:#1d2327;margin:0;padding:24px 16px}main{max-width:720px;margin:0 auto;background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px}pre{white-space:pre-wrap;word-break:break-word;background:#f6f7f7;padding:12px;font-size:12px;max-height:50vh;overflow:auto}.s{font-weight:600}</style></head><body><main>'
 			. '<h1>Site restore</h1>'
-			. '<p class="s">' . $e( $labels[ $status ] ?? ucfirst( $status ) ) . '</p>'
-			. '<p>' . $e( $req['progress'] ?? '' ) . '</p>'
-			. ( ! empty( $req['error'] ) ? '<p style="color:#b32d2e">' . $e( $req['error'] ) . '</p>' : '' )
-			. '<pre>' . $e( implode( "\n", (array) ( $req['log'] ?? array() ) ) ) . '</pre>'
-			. ( $active ? '<p>This page refreshes every 10 seconds. You can close it; the restore continues on its own.</p>' : '<p><a href="' . $e( admin_url( 'admin.php?page=dtc-backups' ) ) . '">Back to TotalCare</a></p>' )
+			. '<p class="s">' . esc_html( $labels[ $status ] ?? ucfirst( $status ) ) . '</p>'
+			. '<p>' . esc_html( (string) ( $req['progress'] ?? '' ) ) . '</p>'
+			. ( ! empty( $req['error'] ) ? '<p style="color:#b32d2e">' . esc_html( (string) $req['error'] ) . '</p>' : '' )
+			. '<pre>' . esc_html( implode( "\n", (array) ( $req['log'] ?? array() ) ) ) . '</pre>'
+			. ( $active ? '<p>This page refreshes every 10 seconds. You can close it; the restore continues on its own.</p>' : '<p><a href="' . esc_url( admin_url( 'admin.php?page=digifix-tc-backups' ) ) . '">Back to TotalCare</a></p>' )
 			. '</main></body></html>';
 		exit;
 	}
@@ -521,14 +518,14 @@ final class DTC_Guardian {
 		if ( ! $req || 'totalcare' === ( $req['engine'] ?? '' ) || ! in_array( $req['status'] ?? '', self::ACTIVE, true ) ) {
 			return;
 		}
-		if ( time() - (int) ( $req['updated'] ?? 0 ) > 90 && get_transient( 'dtc_guardian_watchdog' ) === false ) {
-			set_transient( 'dtc_guardian_watchdog', 1, 60 );
-			self::loopback( 'dtc_guardian_restore', array( 'wpvivid_restore' => 1 ) );
+		if ( time() - (int) ( $req['updated'] ?? 0 ) > 90 && get_transient( 'digifix_tc_guardian_watchdog' ) === false ) {
+			set_transient( 'digifix_tc_guardian_watchdog', 1, 60 );
+			self::loopback( 'digifix_tc_guardian_restore', array( 'wpvivid_restore' => 1 ) );
 		}
 	}
 
 	public static function ajax_restore() {
-		if ( ! self::verify_request( 'dtc_guardian_restore' ) ) {
+		if ( ! self::verify_request( 'digifix_tc_guardian_restore' ) ) {
 			wp_send_json( array( 'ok' => false ), 403 );
 		}
 		$current = self::read( 'restore-request' );
@@ -537,7 +534,7 @@ final class DTC_Guardian {
 			wp_send_json( array( 'ok' => true, 'idle' => true ) );
 		}
 
-		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 		self::$lock = fopen( self::dir() . '/restore.lock', 'c' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		if ( ! self::$lock || ! flock( self::$lock, LOCK_EX | LOCK_NB ) ) {
 			wp_send_json( array( 'ok' => true, 'busy' => true ) );
@@ -576,7 +573,7 @@ final class DTC_Guardian {
 					break;
 			}
 		} catch ( Throwable $e ) {
-			$req = self::phase_failed( $req, get_class( $e ) . ': ' . $e->getMessage() );
+			$req = self::phase_failed( $req, get_class( $e ) . ': ' . wp_specialchars_decode( $e->getMessage(), ENT_QUOTES ) );
 		}
 
 		$req['updated'] = time();
@@ -584,10 +581,10 @@ final class DTC_Guardian {
 		self::unlock();
 
 		if ( in_array( $req['status'], array( 'running', 'finishing', 'failing' ), true ) ) {
-			self::loopback( 'dtc_guardian_restore', array( 'wpvivid_restore' => 1 ) );
+			self::loopback( 'digifix_tc_guardian_restore', array( 'wpvivid_restore' => 1 ) );
 		} else {
 			// TotalCare is active again; let it reconcile right away.
-			self::loopback( 'dtc_kick' );
+			self::loopback( 'digifix_tc_kick' );
 		}
 		wp_send_json( array( 'ok' => true, 'status' => $req['status'] ) );
 	}
@@ -609,7 +606,7 @@ final class DTC_Guardian {
 		$restore = new WPvivid_Restore_2();
 		$ret     = $restore->create_restore_task( $req['backup_id'], array( 'restore_detail_options' => array() ), 0 );
 		if ( empty( $ret['result'] ) || 'success' !== $ret['result'] ) {
-			throw new Exception( 'Could not create the WPvivid restore task: ' . ( $ret['error'] ?? 'unknown error' ) );
+			throw new Exception( esc_html( 'Could not create the WPvivid restore task: ' . ( $ret['error'] ?? 'unknown error' ) ) );
 		}
 
 		// Same preparation as WPvivid's own init_restore_task().
@@ -642,7 +639,7 @@ final class DTC_Guardian {
 		$req['chunks'] = (int) ( $req['chunks'] ?? 0 ) + 1;
 
 		if ( empty( $ret['result'] ) || 'success' !== $ret['result'] || 'error' === ( $task['status'] ?? '' ) ) {
-			throw new Exception( 'WPvivid restore error: ' . ( $ret['error'] ?? $task['error'] ?? 'unknown error' ) );
+			throw new Exception( esc_html( 'WPvivid restore error: ' . ( $ret['error'] ?? $task['error'] ?? 'unknown error' ) ) );
 		}
 
 		$current = $task['sub_tasks'][ $task['do_sub_task'] ?? 0 ]['type'] ?? '';
@@ -658,7 +655,7 @@ final class DTC_Guardian {
 		$restore = new WPvivid_Restore_2();
 		$restore->_disable_maintenance_mode();
 		$restore->write_litespeed_rule( false );
-		@unlink( WPMU_PLUGIN_DIR . '/a-wpvivid-restore-mu-plugin-check.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		@unlink( WPMU_PLUGIN_DIR . '/a-wpvivid-restore-mu-plugin-check.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 
 		$plugins = get_option( 'wpvivid_save_active_plugins', array() );
 		$ret     = $restore->check_restore_db();
@@ -666,7 +663,7 @@ final class DTC_Guardian {
 		try {
 			$restore->delete_temp_files();
 		} catch ( Throwable $e ) {
-			$req = self::note( $req, 'Temp file cleanup skipped: ' . $e->getMessage() );
+			$req = self::note( $req, 'Temp file cleanup skipped: ' . wp_specialchars_decode( $e->getMessage(), ENT_QUOTES ) );
 		}
 		delete_transient( 'wp_core_block_css_files' );
 
@@ -698,7 +695,7 @@ final class DTC_Guardian {
 				$restore->_disable_maintenance_mode();
 				if ( ! empty( $req['prepared'] ) ) {
 					$restore->write_litespeed_rule( false );
-					@unlink( WPMU_PLUGIN_DIR . '/a-wpvivid-restore-mu-plugin-check.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+					@unlink( WPMU_PLUGIN_DIR . '/a-wpvivid-restore-mu-plugin-check.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 					$plugins = get_option( 'wpvivid_save_active_plugins', array() );
 					if ( get_option( 'wpvivid_restore_task' ) ) {
 						$restore->delete_temp_tables();
@@ -711,7 +708,7 @@ final class DTC_Guardian {
 				wp_cache_flush();
 			}
 		} catch ( Throwable $e ) {
-			$error .= ' Cleanup also failed: ' . $e->getMessage();
+			$error .= ' Cleanup also failed: ' . wp_specialchars_decode( $e->getMessage(), ENT_QUOTES );
 		}
 		$req['status'] = 'failed';
 		$req['error']  = $error;
@@ -719,4 +716,4 @@ final class DTC_Guardian {
 	}
 }
 
-DTC_Guardian::boot();
+Digifix_TC_Guardian::boot();

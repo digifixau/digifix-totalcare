@@ -8,7 +8,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Job {
+// TotalCare's own job and activity-log tables. Job state changes between requests, so these
+// queries must not be served from the object cache.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+class Digifix_TC_Job {
 
 	public $id;
 	public $type;
@@ -101,11 +105,11 @@ class DTC_Job {
 		global $wpdb;
 		$this->updated_at = current_time( 'mysql', true );
 		$state            = wp_json_encode( $this->state, JSON_INVALID_UTF8_SUBSTITUTE );
-		$table            = DTC_Jobs::table();
-		$finished         = $this->finished_at ? $wpdb->prepare( '%s', $this->finished_at ) : 'NULL';
+		$table            = Digifix_TC_Jobs::table();
 		$rows             = $wpdb->query(
 			$wpdb->prepare(
-				"UPDATE $table SET status = %s, step = %s, state = %s, message = %s, attempts = %d, updated_at = %s, next_run_at = %d, finished_at = $finished WHERE id = %d AND status IN ('pending','running')", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"UPDATE %i SET status = %s, step = %s, state = %s, message = %s, attempts = %d, updated_at = %s, next_run_at = %d, finished_at = NULLIF(%s, '') WHERE id = %d AND status IN ('pending','running')",
+				$table,
 				$this->status,
 				$this->step,
 				false === $state ? '{}' : $state,
@@ -113,6 +117,7 @@ class DTC_Job {
 				$this->attempts,
 				$this->updated_at,
 				$this->next_run_at,
+				(string) $this->finished_at,
 				$this->id
 			)
 		);
@@ -121,7 +126,7 @@ class DTC_Job {
 		}
 		if ( 0 === (int) $rows ) {
 			// No change also reports 0 rows; check the row is still active.
-			$status = $wpdb->get_var( $wpdb->prepare( "SELECT status FROM $table WHERE id = %d", $this->id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$status = $wpdb->get_var( $wpdb->prepare( 'SELECT status FROM %i WHERE id = %d', $table, $this->id ) );
 			return in_array( $status, array( 'pending', 'running' ), true ) || $status === $this->status;
 		}
 		return true;

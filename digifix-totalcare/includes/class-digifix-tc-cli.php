@@ -10,13 +10,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Backups and restores from the command line.
  */
-class DTC_CLI {
+class Digifix_TC_CLI {
 
-	private function wait_for_job( DTC_Job $job ) {
+	private function wait_for_job( Digifix_TC_Job $job ) {
 		$last = '';
 		while ( true ) {
-			DTC_Jobs::tick();
-			$job = DTC_Jobs::find( $job->id );
+			Digifix_TC_Jobs::tick();
+			$job = Digifix_TC_Jobs::find( $job->id );
 			if ( ! $job ) {
 				WP_CLI::error( 'Job disappeared.' );
 			}
@@ -44,7 +44,7 @@ class DTC_CLI {
 	 * @when after_wp_load
 	 */
 	public function backup( $args, $assoc ) {
-		$job = DTC_Backup_Service::queue( 'manual', ! empty( $assoc['full'] ) );
+		$job = Digifix_TC_Backup_Service::queue( 'manual', ! empty( $assoc['full'] ) );
 		if ( ! $job ) {
 			WP_CLI::error( 'Could not queue the backup.' );
 		}
@@ -70,7 +70,7 @@ class DTC_CLI {
 	 * @when after_wp_load
 	 */
 	public function list( $args, $assoc ) {
-		$remote = DTC_Bk_Remote::from_settings( $assoc['folder'] ?? null );
+		$remote = Digifix_TC_Bk_Remote::from_settings( $assoc['folder'] ?? null );
 		if ( is_wp_error( $remote ) ) {
 			WP_CLI::error( $remote->get_error_message() );
 		}
@@ -122,9 +122,9 @@ class DTC_CLI {
 	 * @when after_wp_load
 	 */
 	public function restore( $args, $assoc ) {
-		$scope = ! empty( $assoc['scope'] ) ? array_map( 'trim', explode( ',', $assoc['scope'] ) ) : DTC_Restore::ALL_SCOPE;
+		$scope = ! empty( $assoc['scope'] ) ? array_map( 'trim', explode( ',', $assoc['scope'] ) ) : Digifix_TC_Restore::ALL_SCOPE;
 		WP_CLI::confirm( 'Restore ' . implode( ', ', $scope ) . ' from backup ' . $args[0] . '? Changes made since then will be lost.', $assoc );
-		$res = DTC_Restore::begin(
+		$res = Digifix_TC_Restore::begin(
 			$args[0],
 			0,
 			'Restore started from WP-CLI.',
@@ -143,9 +143,9 @@ class DTC_CLI {
 		$seen = 0;
 		while ( true ) {
 			sleep( 3 );
-			$req = DTC_Restore::request();
+			$req = Digifix_TC_Restore::request();
 			if ( ! $req ) {
-				$req = DTC_Storage::read( DTC_Restore::LAST );
+				$req = Digifix_TC_Storage::read( Digifix_TC_Restore::LAST );
 			}
 			foreach ( array_slice( (array) ( $req['log'] ?? array() ), $seen ) as $line ) {
 				WP_CLI::log( $line );
@@ -155,11 +155,11 @@ class DTC_CLI {
 				break;
 			}
 			// Loopbacks blocked (e.g. basic auth on staging): drive it from here.
-			if ( time() - (int) $req['updated'] > 60 && class_exists( 'DTC_Guardian' ) ) {
-				DTC_Guardian::step_now();
+			if ( time() - (int) $req['updated'] > 60 && class_exists( 'Digifix_TC_Guardian' ) ) {
+				Digifix_TC_Guardian::step_now();
 			}
 		}
-		DTC_Restore::reconcile();
+		Digifix_TC_Restore::reconcile();
 		'done' === ( $req['status'] ?? '' ) ? WP_CLI::success( 'Restore finished.' ) : WP_CLI::error( 'Restore failed: ' . ( $req['error'] ?? 'unknown error' ) );
 	}
 
@@ -177,7 +177,7 @@ class DTC_CLI {
 	 * @when after_wp_load
 	 */
 	public function verify( $args, $assoc ) {
-		$remote = DTC_Bk_Remote::from_settings( $assoc['folder'] ?? null );
+		$remote = Digifix_TC_Bk_Remote::from_settings( $assoc['folder'] ?? null );
 		if ( is_wp_error( $remote ) ) {
 			WP_CLI::error( $remote->get_error_message() );
 		}
@@ -185,7 +185,7 @@ class DTC_CLI {
 		if ( ! is_array( $m ) ) {
 			WP_CLI::error( 'Manifest not found.' );
 		}
-		$tmp     = wp_tempnam( 'dtc-verify' );
+		$tmp     = wp_tempnam( 'digifix-tc-verify' );
 		$members = $remote->s3->get( $remote->backup_key( $args[0], 'members.tsv.gz' ) );
 		if ( ! is_string( $members ) ) {
 			WP_CLI::error( 'members.tsv.gz not found.' );
@@ -193,7 +193,7 @@ class DTC_CLI {
 		$errors = 0;
 		$count  = 0;
 		foreach ( explode( "\n", gzdecode( $members ) ) as $line ) {
-			$r = DTC_Bk_Util::tsv_parse( $line );
+			$r = Digifix_TC_Bk_Util::tsv_parse( $line );
 			if ( count( $r ) < 7 ) {
 				continue;
 			}
@@ -211,7 +211,7 @@ class DTC_CLI {
 			}
 			++$count;
 		}
-		@unlink( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		wp_delete_file( $tmp );
 		$errors ? WP_CLI::error( "$errors problem(s) in $count member(s)." ) : WP_CLI::success( "All $count archive members verified." );
 	}
 
@@ -221,7 +221,7 @@ class DTC_CLI {
 	 * @when after_wp_load
 	 */
 	public function prune( $args, $assoc ) {
-		$remote = DTC_Bk_Remote::from_settings();
+		$remote = Digifix_TC_Bk_Remote::from_settings();
 		if ( is_wp_error( $remote ) ) {
 			WP_CLI::error( $remote->get_error_message() );
 		}
@@ -229,7 +229,7 @@ class DTC_CLI {
 		if ( is_wp_error( $owner ) ) {
 			WP_CLI::error( $owner->get_error_message() );
 		}
-		$res = DTC_Bk_Retention::run( $remote, array_intersect_key( DTC_Settings::all(), DTC_Bk_Retention::defaults() ) );
+		$res = Digifix_TC_Bk_Retention::run( $remote, array_intersect_key( Digifix_TC_Settings::all(), Digifix_TC_Bk_Retention::defaults() ) );
 		if ( is_wp_error( $res ) ) {
 			WP_CLI::error( $res->get_error_message() );
 		}

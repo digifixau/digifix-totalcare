@@ -7,43 +7,46 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
+// Removes TotalCare's own tables; there is nothing to cache.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
 global $wpdb;
 
-$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}dtc_jobs" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
-$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}dtc_events" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
+$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}digifix_tc_jobs" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
+$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}digifix_tc_events" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
 
 // Temporary and pre-restore copies of tables left by a restore.
-foreach ( array_merge( (array) $wpdb->get_col( "SHOW TABLES LIKE 'dtcr\\_%'" ), (array) $wpdb->get_col( "SHOW TABLES LIKE 'dtcold\\_%'" ) ) as $dtc_table ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-	$wpdb->query( 'DROP TABLE IF EXISTS `' . str_replace( '`', '``', $dtc_table ) . '`' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.NotPrepared
+foreach ( array_merge( (array) $wpdb->get_col( "SHOW TABLES LIKE 'dtcr\\_%'" ), (array) $wpdb->get_col( "SHOW TABLES LIKE 'dtcold\\_%'" ) ) as $digifix_tc_table ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $digifix_tc_table ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
 }
 
-foreach ( array( 'dtc_settings', 'dtc_db_version', 'dtc_last_tick', 'dtc_guardian_error', 'dtc_update_skip', 'dtc_wpvivid_results', 'dtc_s3_secret', 'dtc_site_uuid', 'dtc_installed_version' ) as $dtc_option ) {
-	delete_option( $dtc_option );
+foreach ( array( 'digifix_tc_settings', 'digifix_tc_db_version', 'digifix_tc_last_tick', 'digifix_tc_guardian_error', 'digifix_tc_update_skip', 'digifix_tc_wpvivid_results', 'digifix_tc_s3_secret', 'digifix_tc_site_uuid', 'digifix_tc_installed_version' ) as $digifix_tc_option ) {
+	delete_option( $digifix_tc_option );
 }
 
 // LiteSpeed noabort rule added by the installer.
-$dtc_htaccess = ABSPATH . '.htaccess';
-if ( file_exists( $dtc_htaccess ) && is_writable( $dtc_htaccess ) ) {
+$digifix_tc_htaccess = ABSPATH . '.htaccess';
+if ( file_exists( $digifix_tc_htaccess ) && is_writable( $digifix_tc_htaccess ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 	require_once ABSPATH . 'wp-admin/includes/misc.php';
-	insert_with_markers( $dtc_htaccess, 'Digifix TotalCare', array() );
+	insert_with_markers( $digifix_tc_htaccess, 'Digifix TotalCare', array() );
 }
 
-$dtc_guardian = WPMU_PLUGIN_DIR . '/dtc-guardian.php';
-if ( file_exists( $dtc_guardian ) ) {
-	@unlink( $dtc_guardian ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+$digifix_tc_guardian = WPMU_PLUGIN_DIR . '/digifix-tc-guardian.php';
+if ( file_exists( $digifix_tc_guardian ) ) {
+	wp_delete_file( $digifix_tc_guardian );
 }
-$dtc_dropin = WP_CONTENT_DIR . '/fatal-error-handler.php';
-if ( file_exists( $dtc_dropin ) && false !== strpos( (string) file_get_contents( $dtc_dropin ), 'DTC-GUARDIAN-LOADER' ) ) {
-	@unlink( $dtc_dropin ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+$digifix_tc_dropin = WP_CONTENT_DIR . '/fatal-error-handler.php';
+if ( file_exists( $digifix_tc_dropin ) && false !== strpos( (string) file_get_contents( $digifix_tc_dropin ), 'DIGIFIX-TC-GUARDIAN-LOADER' ) ) {
+	wp_delete_file( $digifix_tc_dropin );
 }
 
-foreach ( array( WP_CONTENT_DIR . '/dtc-data', WP_CONTENT_DIR . '/dtc-rollback' ) as $dtc_dir ) {
-	if ( ! is_dir( $dtc_dir ) ) {
+foreach ( array( WP_CONTENT_DIR . '/digifix-tc-data', WP_CONTENT_DIR . '/digifix-tc-rollback' ) as $digifix_tc_dir ) {
+	if ( ! is_dir( $digifix_tc_dir ) ) {
 		continue;
 	}
-	$dtc_it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dtc_dir, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST );
-	foreach ( $dtc_it as $dtc_item ) {
-		$dtc_item->isDir() ? @rmdir( $dtc_item->getPathname() ) : @unlink( $dtc_item->getPathname() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	$digifix_tc_it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $digifix_tc_dir, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST );
+	foreach ( $digifix_tc_it as $digifix_tc_item ) {
+		$digifix_tc_item->isDir() ? @rmdir( $digifix_tc_item->getPathname() ) : @unlink( $digifix_tc_item->getPathname() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.WP.AlternativeFunctions.unlink_unlink
 	}
-	@rmdir( $dtc_dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	@rmdir( $digifix_tc_dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
 }

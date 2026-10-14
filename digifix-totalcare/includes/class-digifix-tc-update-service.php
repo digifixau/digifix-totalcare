@@ -13,31 +13,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Update_Service {
+class Digifix_TC_Update_Service {
 
-	const SKIP_OPTION = 'dtc_update_skip';
+	const SKIP_OPTION = 'digifix_tc_update_skip';
 
 	public static function schedule_run() {
 		self::queue( 'schedule' );
 	}
 
 	public static function queue( $trigger = 'manual' ) {
-		$job = DTC_Jobs::create(
+		$job = Digifix_TC_Jobs::create(
 			'update',
 			array(
 				'trigger' => $trigger,
-				'engine'  => DTC_Backup_Service::engine(),
+				'engine'  => Digifix_TC_Backup_Service::engine(),
 			),
 			'preflight'
 		);
-		DTC_Jobs::kick();
+		Digifix_TC_Jobs::kick();
 		return $job;
 	}
 
 	/** Remove uploads and partial objects of an unfinished pre-update backup. */
-	public function cleanup( DTC_Job $job ) {
+	public function cleanup( Digifix_TC_Job $job ) {
 		if ( 'wpvivid' !== $job->get( 'engine' ) ) {
-			DTC_Backup_Runner::cleanup( $job );
+			Digifix_TC_Backup_Runner::cleanup( $job );
 		}
 	}
 
@@ -45,7 +45,7 @@ class DTC_Update_Service {
 		return 12 * HOUR_IN_SECONDS;
 	}
 
-	public function run( DTC_Job $job ) {
+	public function run( Digifix_TC_Job $job ) {
 		$method = 'step_' . $job->step;
 		if ( ! method_exists( $this, $method ) ) {
 			$job->fail( 'Unknown step ' . $job->step );
@@ -58,21 +58,21 @@ class DTC_Update_Service {
 	 * Steps
 	 * ------------------------------------------------------------------ */
 
-	private function step_preflight( DTC_Job $job ) {
+	private function step_preflight( Digifix_TC_Job $job ) {
 		self::load_wp_admin();
 
 		$problems = array();
 		if ( 'wpvivid' === $job->get( 'engine' ) ) {
-			if ( ! DTC_WPvivid::is_available() || ! DTC_WPvivid::get_remote() ) {
+			if ( ! Digifix_TC_WPvivid::is_available() || ! Digifix_TC_WPvivid::get_remote() ) {
 				$problems[] = 'WPvivid with an S3 remote is required so a backup can be taken first.';
 			}
 		} else {
-			$remote = DTC_Bk_Remote::from_settings();
+			$remote = Digifix_TC_Bk_Remote::from_settings();
 			if ( is_wp_error( $remote ) ) {
 				$problems[] = 'A backup must be taken first, but remote storage is not ready: ' . $remote->get_error_message();
 			}
 		}
-		if ( ! DTC_Installer::guardian_installed() ) {
+		if ( ! Digifix_TC_Installer::guardian_installed() ) {
 			$problems[] = 'The guardian mu-plugin is not installed.';
 		}
 		if ( 'direct' !== get_filesystem_method() ) {
@@ -82,8 +82,8 @@ class DTC_Update_Service {
 			$problems[] = 'File modifications are disabled (DISALLOW_FILE_MODS).';
 		}
 		$free = function_exists( 'disk_free_space' ) ? @disk_free_space( WP_CONTENT_DIR ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		if ( false !== $free && $free < apply_filters( 'dtc_min_free_disk', 500 * MB_IN_BYTES ) ) {
-			$problems[] = 'Less than ' . size_format( apply_filters( 'dtc_min_free_disk', 500 * MB_IN_BYTES ) ) . ' of free disk space.';
+		if ( false !== $free && $free < apply_filters( 'digifix_tc_min_free_disk', 500 * MB_IN_BYTES ) ) {
+			$problems[] = 'Less than ' . size_format( apply_filters( 'digifix_tc_min_free_disk', 500 * MB_IN_BYTES ) ) . ' of free disk space.';
 		}
 		if ( $problems ) {
 			return $this->abort( $job, 'Updates skipped: ' . implode( ' ', $problems ) );
@@ -100,26 +100,26 @@ class DTC_Update_Service {
 
 		if ( ! $pending ) {
 			$msg = 'No updates available' . ( $skipped ? ' (' . count( $skipped ) . ' skipped)' : '' ) . '.';
-			DTC_Logger::log( 'update', 'info', 'update.none', $msg, array( 'queue' => $queue ), $job->id );
+			Digifix_TC_Logger::log( 'update', 'info', 'update.none', $msg, array( 'queue' => $queue ), $job->id );
 			$job->complete( $msg );
-			DTC_Notifier::notify( 'update.completed', $this->summary( $job ), $job->id );
+			Digifix_TC_Notifier::notify( 'update.completed', $this->summary( $job ), $job->id );
 			return;
 		}
 
-		DTC_Logger::log( 'update', 'info', 'update.started', count( $pending ) . ' update(s) found; taking a backup first.', array( 'queue' => $queue ), $job->id );
+		Digifix_TC_Logger::log( 'update', 'info', 'update.started', count( $pending ) . ' update(s) found; taking a backup first.', array( 'queue' => $queue ), $job->id );
 		$job->go( 'backup_start', 0, count( $pending ) . ' update(s) queued.' );
 	}
 
-	private function step_backup_start( DTC_Job $job ) {
+	private function step_backup_start( Digifix_TC_Job $job ) {
 		if ( 'wpvivid' !== $job->get( 'engine' ) ) {
-			DTC_Backup_Runner::start( $job, 'update' );
+			Digifix_TC_Backup_Runner::start( $job, 'update' );
 			$job->set( 'backup_started', time() );
 			$job->go( 'backup_run', 0, 'Pre-update backup running.' );
 			return;
 		}
-		$task_id = DTC_WPvivid::start_backup( true );
+		$task_id = Digifix_TC_WPvivid::start_backup( true );
 		if ( is_wp_error( $task_id ) ) {
-			if ( 'dtc_wpvivid_busy' === $task_id->get_error_code() && $job->age() < 2 * HOUR_IN_SECONDS ) {
+			if ( 'digifix_tc_wpvivid_busy' === $task_id->get_error_code() && $job->age() < 2 * HOUR_IN_SECONDS ) {
 				$job->wait( 5 * MINUTE_IN_SECONDS, 'Waiting for a running WPvivid backup to finish.' );
 				return;
 			}
@@ -130,53 +130,53 @@ class DTC_Update_Service {
 	}
 
 	/** Pre-update backup with TotalCare's engine, inside this job. */
-	private function step_backup_run( DTC_Job $job ) {
-		$res = DTC_Backup_Runner::step( $job );
+	private function step_backup_run( Digifix_TC_Job $job ) {
+		$res = Digifix_TC_Backup_Runner::step( $job );
 		if ( is_wp_error( $res ) ) {
-			DTC_Backup_Runner::cleanup( $job );
-			DTC_Logger::log( 'backup', 'error', 'backup.failed', 'Pre-update backup failed: ' . $res->get_error_message(), array( 'pre_update' => true ), $job->id );
+			Digifix_TC_Backup_Runner::cleanup( $job );
+			Digifix_TC_Logger::log( 'backup', 'error', 'backup.failed', 'Pre-update backup failed: ' . $res->get_error_message(), array( 'pre_update' => true ), $job->id );
 			return $this->abort( $job, 'Updates skipped because the pre-update backup failed: ' . $res->get_error_message() );
 		}
 		if ( 'done' !== $res ) {
-			$timeout = (int) DTC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
+			$timeout = (int) Digifix_TC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
 			if ( time() - (int) $job->get( 'backup_started' ) > $timeout ) {
-				DTC_Backup_Runner::cleanup( $job );
-				return $this->abort( $job, 'Updates skipped because the pre-update backup did not finish within ' . DTC_Settings::get( 'backup_timeout_hours' ) . ' hours.' );
+				Digifix_TC_Backup_Runner::cleanup( $job );
+				return $this->abort( $job, 'Updates skipped because the pre-update backup did not finish within ' . Digifix_TC_Settings::get( 'backup_timeout_hours' ) . ' hours.' );
 			}
 			$job->go( 'backup_run', 0 );
 			return;
 		}
-		$bk      = (array) $job->get( DTC_Backup_Runner::KEY );
+		$bk      = (array) $job->get( Digifix_TC_Backup_Runner::KEY );
 		$summary = (array) ( $bk['summary'] ?? array() );
 		$job->set( 'backup_id', $summary['backup_id'] ?? '' );
-		DTC_Logger::log( 'backup', 'success', 'backup.completed', sprintf( 'Pre-update %s backup completed (%s, %s files changed).', $summary['type'] ?? '', $summary['size_human'] ?? '?', number_format_i18n( $summary['changed_files'] ?? 0 ) ), $summary + array( 'pre_update' => true ), $job->id );
+		Digifix_TC_Logger::log( 'backup', 'success', 'backup.completed', sprintf( 'Pre-update %s backup completed (%s, %s files changed).', $summary['type'] ?? '', $summary['size_human'] ?? '?', number_format_i18n( $summary['changed_files'] ?? 0 ) ), $summary + array( 'pre_update' => true ), $job->id );
 		// The bulky backup state is no longer needed in this long-running job.
-		$job->set( DTC_Backup_Runner::KEY, array( 'phase' => 'done', 'summary' => $summary ) );
+		$job->set( Digifix_TC_Backup_Runner::KEY, array( 'phase' => 'done', 'summary' => $summary ) );
 		$job->go( 'baseline' );
 	}
 
-	private function step_backup_wait( DTC_Job $job ) {
-		$status = DTC_WPvivid::backup_status( $job->get( 'backup_id' ) );
+	private function step_backup_wait( Digifix_TC_Job $job ) {
+		$status = Digifix_TC_WPvivid::backup_status( $job->get( 'backup_id' ) );
 		if ( 'failed' === $status['status'] ) {
 			return $this->abort( $job, 'Updates skipped because the pre-update backup failed: ' . $status['error'] );
 		}
 		if ( 'completed' !== $status['status'] ) {
-			$timeout = (int) DTC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
+			$timeout = (int) Digifix_TC_Settings::get( 'backup_timeout_hours' ) * HOUR_IN_SECONDS;
 			if ( time() - (int) $job->get( 'backup_started' ) > $timeout ) {
-				return $this->abort( $job, 'Updates skipped because the pre-update backup did not finish within ' . DTC_Settings::get( 'backup_timeout_hours' ) . ' hours. Last WPvivid status: ' . ( $status['progress'] ?: $status['status'] ) . '. See WPvivid → Logs for details.' );
+				return $this->abort( $job, 'Updates skipped because the pre-update backup did not finish within ' . Digifix_TC_Settings::get( 'backup_timeout_hours' ) . ' hours. Last WPvivid status: ' . ( $status['progress'] ?: $status['status'] ) . '. See WPvivid → Logs for details.' );
 			}
 			$job->wait( 60, 'Pre-update backup: ' . ( $status['progress'] ?: $status['status'] ) );
 			return;
 		}
 
-		$summary = DTC_WPvivid::summarize( $job->get( 'backup_id' ) );
-		DTC_Logger::log( 'backup', 'success', 'backup.completed', 'Pre-update backup completed (' . ( $summary['size_human'] ?? '?' ) . ').', $summary + array( 'pre_update' => true ), $job->id );
+		$summary = Digifix_TC_WPvivid::summarize( $job->get( 'backup_id' ) );
+		Digifix_TC_Logger::log( 'backup', 'success', 'backup.completed', 'Pre-update backup completed (' . ( $summary['size_human'] ?? '?' ) . ').', $summary + array( 'pre_update' => true ), $job->id );
 		$job->go( 'baseline' );
 	}
 
-	private function step_baseline( DTC_Job $job ) {
-		$baseline = DTC_Health_Check::baseline();
-		$problems = DTC_Health_Check::baseline_problems( $baseline );
+	private function step_baseline( Digifix_TC_Job $job ) {
+		$baseline = Digifix_TC_Health_Check::baseline();
+		$problems = Digifix_TC_Health_Check::baseline_problems( $baseline );
 		if ( $problems ) {
 			return $this->abort( $job, 'Updates skipped because the site is already failing health checks: ' . implode( '; ', $problems ) );
 		}
@@ -184,7 +184,7 @@ class DTC_Update_Service {
 		$job->go( 'next_item', 0, 'Applying updates.' );
 	}
 
-	private function step_next_item( DTC_Job $job ) {
+	private function step_next_item( Digifix_TC_Job $job ) {
 		self::load_wp_admin();
 		$queue = (array) $job->get( 'queue' );
 
@@ -217,12 +217,12 @@ class DTC_Update_Service {
 		}
 
 		$item = $queue[ $idx ];
-		$snap = DTC_Snapshot::create( $job->id, $item['kind'], $item['id'], $item['from'] );
+		$snap = Digifix_TC_Snapshot::create( $job->id, $item['kind'], $item['id'], $item['from'] );
 		if ( is_wp_error( $snap ) ) {
 			$queue[ $idx ]['status'] = 'failed';
 			$queue[ $idx ]['reason'] = 'Not updated: snapshot failed (' . $snap->get_error_message() . ').';
 			$job->set( 'queue', $queue )->go( 'next_item' );
-			DTC_Logger::log( 'update', 'warning', 'update.item_failed', $item['name'] . ': ' . $queue[ $idx ]['reason'], $queue[ $idx ], $job->id );
+			Digifix_TC_Logger::log( 'update', 'warning', 'update.item_failed', $item['name'] . ': ' . $queue[ $idx ]['reason'], $queue[ $idx ], $job->id );
 			return;
 		}
 
@@ -232,21 +232,21 @@ class DTC_Update_Service {
 		$job->set( 'queue', $queue )->set( 'current', $idx );
 		$job->message = 'Updating ' . $item['name'] . '.';
 		$job->save();
-		DTC_Snapshot::set_inflight( $snap, $job->id );
+		Digifix_TC_Snapshot::set_inflight( $snap, $job->id );
 
 		$result = $this->upgrade_item( $item );
 
 		if ( is_wp_error( $result ) ) {
 			// The upgrader failed before or during install; make sure the old
 			// version is in place.
-			$restored = DTC_Snapshot::restore( $snap );
-			DTC_Snapshot::clear_inflight();
+			$restored = Digifix_TC_Snapshot::restore( $snap );
+			Digifix_TC_Snapshot::clear_inflight();
 			$this->ensure_active_state( $item );
 			$job->set( 'fatal_since', time() );
 			$queue[ $idx ]['status'] = 'failed';
 			$queue[ $idx ]['reason'] = $result->get_error_message() . ( is_wp_error( $restored ) ? ' Snapshot restore also failed: ' . $restored->get_error_message() : '' );
 			$job->set( 'queue', $queue );
-			DTC_Logger::log( 'update', 'warning', 'update.item_failed', $item['name'] . ' could not be updated: ' . $queue[ $idx ]['reason'], $queue[ $idx ], $job->id );
+			Digifix_TC_Logger::log( 'update', 'warning', 'update.item_failed', $item['name'] . ' could not be updated: ' . $queue[ $idx ]['reason'], $queue[ $idx ], $job->id );
 			$job->go( is_wp_error( $restored ) ? 'item_check' : 'next_item', 5 );
 			return;
 		}
@@ -254,16 +254,16 @@ class DTC_Update_Service {
 		$job->go( 'item_check', 5, 'Checking site after updating ' . $item['name'] . '.' );
 	}
 
-	private function step_item_check( DTC_Job $job ) {
+	private function step_item_check( Digifix_TC_Job $job ) {
 		self::load_wp_admin();
 		$queue = (array) $job->get( 'queue' );
 		$idx   = $job->get( 'current' );
 		$item  = $queue[ $idx ];
 
-		$inflight        = DTC_Snapshot::get_inflight();
+		$inflight        = Digifix_TC_Snapshot::get_inflight();
 		$guardian_rolled = $inflight && 'rolled_back' === ( $inflight['status'] ?? '' );
 		$this->ensure_active_state( $item );
-		$check     = DTC_Health_Check::check( $job->get( 'baseline' ), (int) $item['started'] - 1 );
+		$check     = Digifix_TC_Health_Check::check( $job->get( 'baseline' ), (int) $item['started'] - 1 );
 		$installed = $this->installed_version( $item );
 		if ( 'failed' !== $item['status'] && ( '' === $installed || version_compare( $installed, $item['from'], '<=' ) ) ) {
 			// Interrupted or partial install: files missing or still the old version.
@@ -272,13 +272,13 @@ class DTC_Update_Service {
 		}
 
 		if ( $check['passed'] && ! $guardian_rolled && 'failed' !== $item['status'] ) {
-			DTC_Snapshot::clear_inflight();
+			Digifix_TC_Snapshot::clear_inflight();
 			$job->set( 'fatal_since', time() );
 			$queue[ $idx ]['status']   = 'updated';
 			$queue[ $idx ]['to']       = $installed;
 			$queue[ $idx ]['warnings'] = $check['soft'];
 			$job->set( 'queue', $queue );
-			DTC_Logger::log( 'update', $check['soft'] ? 'warning' : 'success', 'update.item_updated', sprintf( '%s updated %s → %s.', $item['name'], $item['from'], $queue[ $idx ]['to'] ), self::public_item( $queue[ $idx ] ), $job->id );
+			Digifix_TC_Logger::log( 'update', $check['soft'] ? 'warning' : 'success', 'update.item_updated', sprintf( '%s updated %s → %s.', $item['name'], $item['from'], $queue[ $idx ]['to'] ), self::public_item( $queue[ $idx ] ), $job->id );
 			$job->go( 'next_item' );
 			return;
 		}
@@ -291,15 +291,15 @@ class DTC_Update_Service {
 		// Restore even after a guardian rollback: the upgrader may have kept
 		// writing into the folder after the guardian swapped it.
 		if ( file_exists( $item['snapshot']['snapshot'] ) ) {
-			$restored = DTC_Snapshot::restore( $item['snapshot'] );
+			$restored = Digifix_TC_Snapshot::restore( $item['snapshot'] );
 			if ( is_wp_error( $restored ) ) {
 				$reasons[] = 'Snapshot restore failed: ' . $restored->get_error_message();
 			}
 		}
 		if ( $guardian_rolled && ! empty( $inflight['failed_copy'] ) ) {
-			DTC_Snapshot::rrmdir( $inflight['failed_copy'] );
+			Digifix_TC_Snapshot::rrmdir( $inflight['failed_copy'] );
 		}
-		DTC_Snapshot::clear_inflight();
+		Digifix_TC_Snapshot::clear_inflight();
 		$this->ensure_active_state( $item );
 		$job->set( 'fatal_since', time() );
 
@@ -308,10 +308,10 @@ class DTC_Update_Service {
 		$job->set( 'queue', $queue );
 		$this->add_skip( $item );
 
-		DTC_Logger::log( 'update', 'error', 'update.rolled_back', sprintf( '%s %s broke the site and was rolled back to %s.', $item['name'], $item['to'], $item['from'] ), self::public_item( $queue[ $idx ] ), $job->id );
-		DTC_Notifier::notify( 'update.rolled_back', self::public_item( $queue[ $idx ] ), $job->id );
+		Digifix_TC_Logger::log( 'update', 'error', 'update.rolled_back', sprintf( '%s %s broke the site and was rolled back to %s.', $item['name'], $item['to'], $item['from'] ), self::public_item( $queue[ $idx ] ), $job->id );
+		Digifix_TC_Notifier::notify( 'update.rolled_back', self::public_item( $queue[ $idx ] ), $job->id );
 
-		$recheck = DTC_Health_Check::check( $job->get( 'baseline' ), time() );
+		$recheck = Digifix_TC_Health_Check::check( $job->get( 'baseline' ), time() );
 		if ( ! $recheck['passed'] ) {
 			$job->set( 'restore_reason', 'Site still failing after rolling back ' . $item['name'] . ': ' . implode( '; ', array_slice( $recheck['hard'], 0, 3 ) ) );
 			$job->go( 'full_restore' );
@@ -320,7 +320,7 @@ class DTC_Update_Service {
 		$job->go( 'next_item' );
 	}
 
-	private function step_core_update( DTC_Job $job ) {
+	private function step_core_update( Digifix_TC_Job $job ) {
 		// Do not require update-core.php here: Core_Upgrader loads the NEW
 		// version's copy from that path and require_once would skip it.
 		self::load_wp_admin();
@@ -349,15 +349,15 @@ class DTC_Update_Service {
 			$queue[ $idx ]['status'] = 'failed';
 			$queue[ $idx ]['reason'] = is_wp_error( $result ) ? $result->get_error_message() : 'Core upgrader returned no result.';
 			$job->set( 'queue', $queue );
-			DTC_Logger::log( 'update', 'warning', 'update.item_failed', 'WordPress core update failed: ' . $queue[ $idx ]['reason'], self::public_item( $queue[ $idx ] ), $job->id );
+			Digifix_TC_Logger::log( 'update', 'warning', 'update.item_failed', 'WordPress core update failed: ' . $queue[ $idx ]['reason'], self::public_item( $queue[ $idx ] ), $job->id );
 		}
 		$job->go( 'core_check', 10, 'Checking site after core update.' );
 	}
 
-	private function step_core_check( DTC_Job $job ) {
+	private function step_core_check( Digifix_TC_Job $job ) {
 		$queue = (array) $job->get( 'queue' );
 		$idx   = $job->get( 'current' );
-		$check = DTC_Health_Check::check( $job->get( 'baseline' ), (int) $queue[ $idx ]['started'] - 1 );
+		$check = Digifix_TC_Health_Check::check( $job->get( 'baseline' ), (int) $queue[ $idx ]['started'] - 1 );
 
 		if ( 'updating' === $queue[ $idx ]['status'] ) {
 			$queue[ $idx ]['status']   = $check['passed'] ? 'updated' : 'rolled_back';
@@ -376,15 +376,15 @@ class DTC_Update_Service {
 			return;
 		}
 		if ( 'updated' === $queue[ $idx ]['status'] ) {
-			DTC_Logger::log( 'update', 'success', 'update.item_updated', sprintf( 'WordPress core updated %s → %s.', $queue[ $idx ]['from'], $queue[ $idx ]['to'] ), self::public_item( $queue[ $idx ] ), $job->id );
+			Digifix_TC_Logger::log( 'update', 'success', 'update.item_updated', sprintf( 'WordPress core updated %s → %s.', $queue[ $idx ]['from'], $queue[ $idx ]['to'] ), self::public_item( $queue[ $idx ] ), $job->id );
 		}
 		$job->go( 'verify', 5 );
 	}
 
-	private function step_verify( DTC_Job $job ) {
+	private function step_verify( Digifix_TC_Job $job ) {
 		// Only fatals after the last item was resolved count here; fatals that
 		// caused a per-item rollback were already handled.
-		$check = DTC_Health_Check::check( $job->get( 'baseline' ), (int) $job->get( 'fatal_since', time() ) );
+		$check = Digifix_TC_Health_Check::check( $job->get( 'baseline' ), (int) $job->get( 'fatal_since', time() ) );
 		$job->set( 'final_check', array( 'passed' => $check['passed'], 'hard' => $check['hard'], 'soft' => $check['soft'] ) );
 		if ( ! $check['passed'] ) {
 			$job->set( 'restore_reason', 'Final health check failed: ' . implode( '; ', array_slice( $check['hard'], 0, 3 ) ) );
@@ -394,12 +394,12 @@ class DTC_Update_Service {
 		$job->go( 'finish' );
 	}
 
-	private function step_full_restore( DTC_Job $job ) {
+	private function step_full_restore( Digifix_TC_Job $job ) {
 		$reason = (string) $job->get( 'restore_reason', 'Health check failed.' );
-		DTC_Logger::log( 'update', 'error', 'update.restore_needed', $reason . ' Restoring the pre-update backup.', array(), $job->id );
+		Digifix_TC_Logger::log( 'update', 'error', 'update.restore_needed', $reason . ' Restoring the pre-update backup.', array(), $job->id );
 
 		// Updates only change code and the database; leave uploads alone.
-		$res = DTC_Restore::begin(
+		$res = Digifix_TC_Restore::begin(
 			$job->get( 'backup_id' ),
 			$job->id,
 			$reason,
@@ -413,23 +413,23 @@ class DTC_Update_Service {
 		if ( is_wp_error( $res ) ) {
 			$msg = $reason . ' Automatic restore could not start: ' . $res->get_error_message();
 			$job->fail( $msg );
-			DTC_Logger::log( 'restore', 'error', 'restore.failed', $msg, array(), $job->id );
-			DTC_Notifier::notify( 'update.failed', array_merge( $this->summary( $job ), array( 'error' => $msg ) ), $job->id );
+			Digifix_TC_Logger::log( 'restore', 'error', 'restore.failed', $msg, array(), $job->id );
+			Digifix_TC_Notifier::notify( 'update.failed', array_merge( $this->summary( $job ), array( 'error' => $msg ) ), $job->id );
 			return;
 		}
 		$job->go( 'restoring', 60, 'Restoring pre-update backup.' );
 	}
 
-	private function step_restoring( DTC_Job $job ) {
-		if ( ! DTC_Restore::request() ) {
+	private function step_restoring( Digifix_TC_Job $job ) {
+		if ( ! Digifix_TC_Restore::request() ) {
 			$job->fail( 'The restore request disappeared before the guardian reported a result.' );
-			DTC_Notifier::notify( 'update.failed', array_merge( $this->summary( $job ), array( 'error' => $job->message ) ), $job->id );
+			Digifix_TC_Notifier::notify( 'update.failed', array_merge( $this->summary( $job ), array( 'error' => $job->message ) ), $job->id );
 			return;
 		}
 		$job->wait( 60 );
 	}
 
-	private function step_post_restore( DTC_Job $job ) {
+	private function step_post_restore( Digifix_TC_Job $job ) {
 		$result = (array) $job->get( 'restore_result' );
 		$queue  = (array) $job->get( 'queue' );
 
@@ -448,38 +448,38 @@ class DTC_Update_Service {
 		if ( empty( $result['ok'] ) ) {
 			$msg = 'Full restore failed: ' . ( $result['error'] ?? 'unknown error' ) . '. Manual attention required.';
 			$job->fail( $msg );
-			DTC_Notifier::notify( 'restore.failed', array_merge( $this->summary( $job ), $result, array( 'error' => $msg ) ), $job->id );
+			Digifix_TC_Notifier::notify( 'restore.failed', array_merge( $this->summary( $job ), $result, array( 'error' => $msg ) ), $job->id );
 			return;
 		}
 
-		$check = DTC_Health_Check::check( $job->get( 'baseline' ), time() );
+		$check = Digifix_TC_Health_Check::check( $job->get( 'baseline' ), time() );
 		$job->set( 'final_check', array( 'passed' => $check['passed'], 'hard' => $check['hard'], 'soft' => $check['soft'] ) );
 		if ( $check['passed'] ) {
-			DTC_Restore::drop_rollback_tables();
+			Digifix_TC_Restore::drop_rollback_tables();
 		}
 		$msg = 'Updates were reverted by restoring the pre-update backup. ' . ( $check['passed'] ? 'Site is healthy again.' : 'Site is STILL failing health checks.' );
-		DTC_Logger::log( 'update', $check['passed'] ? 'warning' : 'error', 'update.restored', $msg, $this->summary( $job ), $job->id );
+		Digifix_TC_Logger::log( 'update', $check['passed'] ? 'warning' : 'error', 'update.restored', $msg, $this->summary( $job ), $job->id );
 		$job->finish( 'failed', $msg );
-		DTC_Notifier::notify( 'update.restored', array_merge( $this->summary( $job ), array( 'restore' => $result, 'health_passed' => $check['passed'], 'health' => $check['hard'] ) ), $job->id );
+		Digifix_TC_Notifier::notify( 'update.restored', array_merge( $this->summary( $job ), array( 'restore' => $result, 'health_passed' => $check['passed'], 'health' => $check['hard'] ) ), $job->id );
 	}
 
-	private function step_finish( DTC_Job $job ) {
-		DTC_Snapshot::cleanup( (int) DTC_Settings::get( 'snapshot_keep_days' ) );
+	private function step_finish( Digifix_TC_Job $job ) {
+		Digifix_TC_Snapshot::cleanup( (int) Digifix_TC_Settings::get( 'snapshot_keep_days' ) );
 		$summary = $this->summary( $job );
 		$msg     = sprintf( 'Update run finished: %d updated, %d rolled back, %d failed, %d skipped.', $summary['counts']['updated'], $summary['counts']['rolled_back'], $summary['counts']['failed'], $summary['counts']['skipped'] );
-		DTC_Logger::log( 'update', $summary['counts']['rolled_back'] || $summary['counts']['failed'] ? 'warning' : 'success', 'update.completed', $msg, $summary, $job->id );
+		Digifix_TC_Logger::log( 'update', $summary['counts']['rolled_back'] || $summary['counts']['failed'] ? 'warning' : 'success', 'update.completed', $msg, $summary, $job->id );
 		$job->complete( $msg );
-		DTC_Notifier::notify( 'update.completed', $summary, $job->id );
+		Digifix_TC_Notifier::notify( 'update.completed', $summary, $job->id );
 	}
 
 	/* ---------------------------------------------------------------------
 	 * Helpers
 	 * ------------------------------------------------------------------ */
 
-	private function abort( DTC_Job $job, $message ) {
+	private function abort( Digifix_TC_Job $job, $message ) {
 		$job->fail( $message );
-		DTC_Logger::log( 'update', 'error', 'update.failed', $message, array(), $job->id );
-		DTC_Notifier::notify( 'update.failed', array_merge( $this->summary( $job ), array( 'error' => $message ) ), $job->id );
+		Digifix_TC_Logger::log( 'update', 'error', 'update.failed', $message, array(), $job->id );
+		Digifix_TC_Notifier::notify( 'update.failed', array_merge( $this->summary( $job ), array( 'error' => $message ) ), $job->id );
 	}
 
 	public static function load_wp_admin() {
@@ -492,7 +492,7 @@ class DTC_Update_Service {
 	}
 
 	private function build_queue() {
-		$s     = DTC_Settings::all();
+		$s     = Digifix_TC_Settings::all();
 		$skip  = get_option( self::SKIP_OPTION, array() );
 		$queue = array();
 
@@ -502,8 +502,8 @@ class DTC_Update_Service {
 			$updates = get_site_transient( 'update_plugins' );
 			$plugins = get_plugins();
 			foreach ( (array) ( $updates->response ?? array() ) as $file => $info ) {
-				if ( DTC_BASENAME === $file ) {
-					continue; // TotalCare updates itself through DTC_Updater.
+				if ( DIGIFIX_TC_BASENAME === $file ) {
+					continue; // Never replace TotalCare's own code from inside its job; WordPress updates it separately.
 				}
 				$item = array(
 					'kind'       => 'plugin',
@@ -656,7 +656,7 @@ class DTC_Update_Service {
 		if ( is_wp_error( $errors ) && $errors->has_errors() ) {
 			return $errors;
 		}
-		return new WP_Error( 'dtc_upgrade', 'Upgrader did not complete. ' . implode( ' ', array_slice( $messages, -3 ) ) );
+		return new WP_Error( 'digifix_tc_upgrade', 'Upgrader did not complete. ' . implode( ' ', array_slice( $messages, -3 ) ) );
 	}
 
 	/** Re-fetch update data if the transient no longer offers this item. */
@@ -707,7 +707,7 @@ class DTC_Update_Service {
 		return array_intersect_key( $item, array_flip( array( 'kind', 'id', 'name', 'from', 'to', 'status', 'reason', 'warnings' ) ) );
 	}
 
-	public function summary( DTC_Job $job ) {
+	public function summary( Digifix_TC_Job $job ) {
 		$queue  = array_map( array( __CLASS__, 'public_item' ), (array) $job->get( 'queue', array() ) );
 		$counts = array(
 			'updated'     => 0,

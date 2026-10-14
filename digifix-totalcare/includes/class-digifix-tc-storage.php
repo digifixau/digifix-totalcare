@@ -4,21 +4,21 @@
  *
  * Anything that must survive a WPvivid database restore (restore requests, the
  * in-flight update marker, fatal error records, the guardian secret) lives in
- * wp-content/dtc-data/ rather than in the database.
+ * wp-content/digifix-tc-data/ rather than in the database.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Storage {
+class Digifix_TC_Storage {
 
 	public static function data_dir() {
-		return WP_CONTENT_DIR . '/dtc-data';
+		return WP_CONTENT_DIR . '/digifix-tc-data';
 	}
 
 	public static function rollback_dir() {
-		return WP_CONTENT_DIR . '/dtc-rollback';
+		return WP_CONTENT_DIR . '/digifix-tc-rollback';
 	}
 
 	public static function ensure_dirs() {
@@ -53,13 +53,13 @@ class DTC_Storage {
 		$file = self::path( $name );
 		$tmp  = $file . '.' . wp_generate_password( 6, false ) . '.tmp';
 		file_put_contents( $tmp, wp_json_encode( $data, JSON_PRETTY_PRINT ) );
-		return rename( $tmp, $file );
+		return rename( $tmp, $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
 	}
 
 	public static function delete( $name ) {
 		$file = self::path( $name );
 		if ( file_exists( $file ) ) {
-			@unlink( $file );
+			wp_delete_file( $file );
 		}
 	}
 
@@ -77,7 +77,7 @@ class DTC_Storage {
 		}
 		self::ensure_dirs();
 		$secret = wp_generate_password( 64, false, false );
-		file_put_contents( $file, "<?php\nreturn " . var_export( $secret, true ) . ";\n" );
+		file_put_contents( $file, "<?php\nreturn '" . $secret . "';\n" ); // Alphanumeric only (no special characters), so it is safe inside the quotes.
 		return $secret;
 	}
 
@@ -110,7 +110,7 @@ class DTC_Storage {
 			array(
 				'timeout'   => 1,
 				'blocking'  => false,
-				'sslverify' => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's filter for requests to this site itself.
 				'body'      => $body,
 			)
 		);

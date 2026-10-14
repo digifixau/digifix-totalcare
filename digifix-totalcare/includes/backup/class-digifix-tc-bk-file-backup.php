@@ -17,12 +17,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_File_Backup {
+class Digifix_TC_Bk_File_Backup {
 
 	const CHUNK = 1048576;
 	const LEVEL = 3;
 
-	/** @var DTC_Bk_Remote */
+	/** @var Digifix_TC_Bk_Remote */
 	private $remote;
 	private $id;
 	private $dir;
@@ -32,7 +32,7 @@ class DTC_Bk_File_Backup {
 	private $roots;
 	private $skip_dirs = array();
 
-	/** @var DTC_Bk_Gz_Writer[] */
+	/** @var Digifix_TC_Bk_Gz_Writer[] */
 	private $writers = array();
 	private $dirs    = array();
 
@@ -68,37 +68,37 @@ class DTC_Bk_File_Backup {
 	/**
 	 * @param string $prev_index Previous backup's plain index file, or '' for a full backup.
 	 */
-	public function __construct( DTC_Bk_Remote $remote, $id, $dir, array $state, $prev_index, array $patterns ) {
+	public function __construct( Digifix_TC_Bk_Remote $remote, $id, $dir, array $state, $prev_index, array $patterns ) {
 		$this->remote   = $remote;
 		$this->id       = $id;
 		$this->dir      = $dir;
 		$this->st       = $state;
 		$this->full     = '' === $prev_index;
 		$this->patterns = $patterns;
-		$this->roots    = DTC_Bk_Areas::roots();
+		$this->roots    = Digifix_TC_Bk_Areas::roots();
 
 		foreach ( $this->roots as $root ) {
 			if ( '' !== $root ) {
 				$this->skip_dirs[ $root ] = true;
 			}
 		}
-		foreach ( DTC_Bk_Areas::protected_dirs() as $d ) {
+		foreach ( Digifix_TC_Bk_Areas::protected_dirs() as $d ) {
 			$this->skip_dirs[ $d ] = true;
 		}
 
-		if ( ! DTC_Bk_Util::truncate( $this->index_file(), $this->st['index_len'] ) ) {
-			throw new DTC_Bk_Exception( 'The local file index is missing; the backup has to start again.' );
+		if ( ! Digifix_TC_Bk_Util::truncate( $this->index_file(), $this->st['index_len'] ) ) {
+			throw new Digifix_TC_Bk_Exception( 'The local file index is missing; the backup has to start again.' );
 		}
 		if ( ! $this->full ) {
 			$this->prev_fh = fopen( $prev_index, 'rb' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 			if ( ! $this->prev_fh ) {
-				throw new DTC_Bk_Exception( 'The previous file index could not be opened.' );
+				throw new Digifix_TC_Bk_Exception( 'The previous file index could not be opened.' );
 			}
 			fseek( $this->prev_fh, (int) $this->st['prev_off'] );
 			$this->prev_load();
 		}
 		foreach ( $this->st['writers'] as $area => $ws ) {
-			$this->writers[ $area ] = new DTC_Bk_Gz_Writer( $this->remote->s3, $this->dir, $area, $ws['key'], $ws );
+			$this->writers[ $area ] = new Digifix_TC_Bk_Gz_Writer( $this->remote->s3, $this->dir, $area, $ws['key'], $ws );
 		}
 	}
 
@@ -121,9 +121,9 @@ class DTC_Bk_File_Backup {
 	}
 
 	/** Abort unfinished multipart uploads (cancel / failure). */
-	public static function abort( DTC_Bk_S3 $s3, array $state ) {
+	public static function abort( Digifix_TC_Bk_S3 $s3, array $state ) {
 		foreach ( (array) ( $state['writers'] ?? array() ) as $ws ) {
-			DTC_Bk_Gz_Writer::abort_state( $s3, $ws );
+			Digifix_TC_Bk_Gz_Writer::abort_state( $s3, $ws );
 		}
 	}
 
@@ -143,9 +143,9 @@ class DTC_Bk_File_Backup {
 				$this->prev_done = true;
 				return;
 			}
-			$row = DTC_Bk_Util::tsv_parse( $line );
+			$row = Digifix_TC_Bk_Util::tsv_parse( $line );
 			if ( count( $row ) >= 9 ) {
-				$ai = array_search( $row[0], DTC_Bk_Areas::ORDER, true );
+				$ai = array_search( $row[0], Digifix_TC_Bk_Areas::ORDER, true );
 				if ( false !== $ai ) {
 					$row['ai']      = $ai;
 					$this->prev_row = $row;
@@ -159,7 +159,7 @@ class DTC_Bk_File_Backup {
 		if ( $this->prev_row['ai'] !== $ai ) {
 			return $this->prev_row['ai'] < $ai ? -1 : 1;
 		}
-		return DTC_Bk_Util::path_cmp( $this->prev_row[1], $path );
+		return Digifix_TC_Bk_Util::path_cmp( $this->prev_row[1], $path );
 	}
 
 	/** Consume previous rows up to (ai, path); return the matching row. */
@@ -263,7 +263,7 @@ class DTC_Bk_File_Backup {
 			if ( 0040000 === $fmt ) {
 				if ( isset( $this->skip_dirs[ $path ] )
 					|| ( 'core' === $area && '' === $frame['d'] && ! in_array( $name, array( 'wp-admin', 'wp-includes' ), true ) )
-					|| DTC_Bk_Areas::is_excluded( $this->patterns, DTC_Bk_Areas::logical( $area, $rel ), $name ) ) {
+					|| Digifix_TC_Bk_Areas::is_excluded( $this->patterns, Digifix_TC_Bk_Areas::logical( $area, $rel ), $name ) ) {
 					continue;
 				}
 				// The parent is only listed again after this folder is popped,
@@ -277,7 +277,7 @@ class DTC_Bk_File_Backup {
 			if ( 0100000 !== $fmt && 0120000 !== $fmt ) {
 				continue;
 			}
-			if ( DTC_Bk_Areas::is_excluded( $this->patterns, DTC_Bk_Areas::logical( $area, $rel ), $name ) ) {
+			if ( Digifix_TC_Bk_Areas::is_excluded( $this->patterns, Digifix_TC_Bk_Areas::logical( $area, $rel ), $name ) ) {
 				continue;
 			}
 			// Not finished yet: the caller marks it when the file is done.
@@ -310,7 +310,7 @@ class DTC_Bk_File_Backup {
 	public function run( $deadline ) {
 		$this->index_fh = fopen( $this->index_file(), 'ab' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		if ( ! $this->index_fh ) {
-			throw new DTC_Bk_Exception( 'Cannot write the file index in the backup work folder.' );
+			throw new Digifix_TC_Bk_Exception( 'Cannot write the file index in the backup work folder.' );
 		}
 		try {
 			$done = $this->loop( $deadline );
@@ -327,7 +327,7 @@ class DTC_Bk_File_Backup {
 	}
 
 	private function loop( $deadline ) {
-		$order = DTC_Bk_Areas::ORDER;
+		$order = Digifix_TC_Bk_Areas::ORDER;
 		while ( $this->st['area_i'] < count( $order ) ) {
 			$ai   = $this->st['area_i'];
 			$area = $order[ $ai ];
@@ -370,7 +370,7 @@ class DTC_Bk_File_Backup {
 				if ( ! $w->member_open() ) {
 					$w->begin_member( self::LEVEL, array( '', 0, 0 ) );
 				}
-				$w->write( DTC_Bk_Tar::eof() );
+				$w->write( Digifix_TC_Bk_Tar::eof() );
 				$w->end_member();
 				$this->st['objects'][ $area . '.tar.gz' ] = $w->finish() + array( 'area' => $area );
 			}
@@ -389,7 +389,7 @@ class DTC_Bk_File_Backup {
 	}
 
 	private function index_row( array $row ) {
-		fwrite( $this->index_fh, DTC_Bk_Util::tsv_row( $row ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
+		fwrite( $this->index_fh, Digifix_TC_Bk_Util::tsv_row( $row ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
 	}
 
 	private function start_entry( $ai, $area, array $e ) {
@@ -429,7 +429,7 @@ class DTC_Bk_File_Backup {
 
 	private function writer( $area ) {
 		if ( ! isset( $this->writers[ $area ] ) ) {
-			$this->writers[ $area ] = new DTC_Bk_Gz_Writer( $this->remote->s3, $this->dir, $area, $this->remote->backup_key( $this->id, $area . '.tar.gz' ) );
+			$this->writers[ $area ] = new Digifix_TC_Bk_Gz_Writer( $this->remote->s3, $this->dir, $area, $this->remote->backup_key( $this->id, $area . '.tar.gz' ) );
 		}
 		return $this->writers[ $area ];
 	}
@@ -445,7 +445,7 @@ class DTC_Bk_File_Backup {
 			$fh = @fopen( $abs, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 			if ( ! $fh ) {
 				if ( ! $c['hdr'] ) {
-					$this->warn( 'Not readable, skipped: ' . DTC_Bk_Areas::logical( $area, $c['rel'] ) );
+					$this->warn( 'Not readable, skipped: ' . Digifix_TC_Bk_Areas::logical( $area, $c['rel'] ) );
 					$this->st['stats']['skipped']++;
 					$this->st['cur'] = null;
 					$this->mark_done( $c['name'] );
@@ -456,7 +456,7 @@ class DTC_Bk_File_Backup {
 		}
 
 		if ( ! $c['hdr'] ) {
-			$level = DTC_Bk_Areas::compressible( $c['name'] ) ? self::LEVEL : 0;
+			$level = Digifix_TC_Bk_Areas::compressible( $c['name'] ) ? self::LEVEL : 0;
 			if ( $w->member_open() && ( $w->member_full() || ( $w->member_level() !== $level && ( $c['size'] >= 262144 || $w->member_raw() >= 4194304 ) ) ) ) {
 				$w->end_member();
 			}
@@ -464,7 +464,7 @@ class DTC_Bk_File_Backup {
 				$w->begin_member( $level, array( '', 0, 0 ) );
 			}
 			$c['m1'] = (int) $w->state()['members'];
-			$w->write( DTC_Bk_Tar::header( $c['rel'], $c['size'], $c['mtime'], $c['mode'], 'l' === $c['type'] ? '2' : '0', $c['link'] ) );
+			$w->write( Digifix_TC_Bk_Tar::header( $c['rel'], $c['size'], $c['mtime'], $c['mode'], 'l' === $c['type'] ? '2' : '0', $c['link'] ) );
 			$c['hdr'] = true;
 		}
 
@@ -481,12 +481,12 @@ class DTC_Bk_File_Backup {
 				return false;
 			}
 			if ( ! $w->member_open() || $w->member_full() ) {
-				$level = $w->member_open() ? $w->member_level() : ( DTC_Bk_Areas::compressible( $c['name'] ) ? self::LEVEL : 0 );
+				$level = $w->member_open() ? $w->member_level() : ( Digifix_TC_Bk_Areas::compressible( $c['name'] ) ? self::LEVEL : 0 );
 				$w->end_member();
 				$w->begin_member( $level, array( $c['rel'], $c['size'], $c['done'] ) );
 			}
 			$want  = (int) min( self::CHUNK, $c['size'] - $c['done'] );
-			$chunk = $fh ? fread( $fh, $want ) : '';
+			$chunk = $fh ? fread( $fh, $want ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
 			if ( false === $chunk || '' === $chunk ) {
 				$chunk       = str_repeat( "\0", $want );
 				$c['forced'] = true;
@@ -494,7 +494,7 @@ class DTC_Bk_File_Backup {
 			$w->write( $chunk );
 			$c['done'] += strlen( $chunk );
 		}
-		$w->write( str_repeat( "\0", DTC_Bk_Tar::pad( $c['size'] ) ) );
+		$w->write( str_repeat( "\0", Digifix_TC_Bk_Tar::pad( $c['size'] ) ) );
 
 		if ( $fh ) {
 			fclose( $fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose

@@ -12,19 +12,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_WPvivid {
+class Digifix_TC_WPvivid {
 
-	const RESULTS_OPTION = 'dtc_wpvivid_results';
+	const RESULTS_OPTION = 'digifix_tc_wpvivid_results';
 	const REMOTE_NAME    = 'Digifix TotalCare S3';
 	const TESTED_UP_TO   = '0.9.136';
-	const KICK_HOOK      = 'dtc_wpvivid_kick';
+	const KICK_HOOK      = 'digifix_tc_wpvivid_kick';
 
 	public static function init() {
 		add_action( 'wpvivid_handle_backup_2_succeed', array( __CLASS__, 'on_succeed' ), 20 );
 		add_action( 'wpvivid_handle_backup_2_failed', array( __CLASS__, 'on_failed' ), 20 );
 		add_filter( 'wpvivid_remote_register', array( __CLASS__, 'register_r2' ), 20 );
-		add_action( 'wp_ajax_dtc_run_wpvivid', array( __CLASS__, 'ajax_run_task' ) );
-		add_action( 'wp_ajax_nopriv_dtc_run_wpvivid', array( __CLASS__, 'ajax_run_task' ) );
+		add_action( 'wp_ajax_digifix_tc_run_wpvivid', array( __CLASS__, 'ajax_run_task' ) );
+		add_action( 'wp_ajax_nopriv_digifix_tc_run_wpvivid', array( __CLASS__, 'ajax_run_task' ) );
 		add_action( self::KICK_HOOK, array( __CLASS__, 'run_task_if_ready' ) );
 		add_filter( 'wpvivid_storage_provider_tran', array( __CLASS__, 'r2_label' ), 20 );
 	}
@@ -34,12 +34,12 @@ class DTC_WPvivid {
 		if ( ! class_exists( 'Wpvivid_S3Compat' ) ) {
 			return $collection;
 		}
-		require_once DTC_DIR . 'includes/integrations/class-dtc-wpvivid-r2.php';
-		return DTC_WPvivid_R2::register( $collection );
+		require_once DIGIFIX_TC_DIR . 'includes/integrations/class-digifix-tc-wpvivid-r2.php';
+		return Digifix_TC_WPvivid_R2::register( $collection );
 	}
 
 	public static function r2_label( $type ) {
-		return 'dtc_r2' === $type ? 'Cloudflare R2' : $type;
+		return 'digifix_tc_r2' === $type ? 'Cloudflare R2' : $type;
 	}
 
 	public static function is_available() {
@@ -79,7 +79,7 @@ class DTC_WPvivid {
 		if ( ! class_exists( 'WPvivid_Setting' ) ) {
 			return null;
 		}
-		$id      = DTC_Settings::get( 's3_remote_id' );
+		$id      = Digifix_TC_Settings::get( 's3_remote_id' );
 		$remotes = WPvivid_Setting::get_all_remote_options();
 		if ( $id && isset( $remotes[ $id ] ) ) {
 			return array_merge( $remotes[ $id ], array( 'id' => $id ) );
@@ -101,11 +101,11 @@ class DTC_WPvivid {
 	public static function configure_remote( array $settings, $secret ) {
 		global $wpvivid_plugin;
 		if ( ! self::is_available() || empty( $wpvivid_plugin->remote_collection ) ) {
-			return new WP_Error( 'dtc_wpvivid', 'WPvivid Backup is not active.' );
+			return new WP_Error( 'digifix_tc_wpvivid', 'WPvivid Backup is not active.' );
 		}
 
 		$cfg = array(
-			'type'    => 'r2' === $settings['s3_type'] ? 'dtc_r2' : $settings['s3_type'],
+			'type'    => 'r2' === $settings['s3_type'] ? 'digifix_tc_r2' : $settings['s3_type'],
 			'name'    => self::REMOTE_NAME,
 			'access'  => $settings['s3_access'],
 			'secret'  => $secret,
@@ -117,16 +117,16 @@ class DTC_WPvivid {
 			$cfg['classMode'] = 0;
 			$cfg['sse']       = 0;
 		} elseif ( 'r2' === $settings['s3_type'] ) {
-			if ( ! class_exists( 'DTC_WPvivid_R2' ) ) {
-				return new WP_Error( 'dtc_wpvivid', 'Cloudflare R2 support could not be loaded into WPvivid.' );
+			if ( ! class_exists( 'Digifix_TC_WPvivid_R2' ) ) {
+				return new WP_Error( 'digifix_tc_wpvivid', 'Cloudflare R2 support could not be loaded into WPvivid.' );
 			}
-			$cfg['endpoint'] = DTC_WPvivid_R2::normalize_endpoint( $settings['s3_endpoint'] );
+			$cfg['endpoint'] = Digifix_TC_WPvivid_R2::normalize_endpoint( $settings['s3_endpoint'] );
 			if ( ! preg_match( '/\.r2\.cloudflarestorage\.com$/', $cfg['endpoint'] ) ) {
-				return new WP_Error( 'dtc_wpvivid', 'Enter your Cloudflare account ID or the R2 S3 API URL (https://<account-id>.r2.cloudflarestorage.com).' );
+				return new WP_Error( 'digifix_tc_wpvivid', 'Enter your Cloudflare account ID or the R2 S3 API URL (https://<account-id>.r2.cloudflarestorage.com).' );
 			}
 		} else {
 			if ( empty( $settings['s3_endpoint'] ) ) {
-				return new WP_Error( 'dtc_wpvivid', 'An endpoint is required for S3-compatible storage.' );
+				return new WP_Error( 'digifix_tc_wpvivid', 'An endpoint is required for S3-compatible storage.' );
 			}
 			$cfg['endpoint'] = $settings['s3_endpoint'];
 		}
@@ -141,16 +141,16 @@ class DTC_WPvivid {
 		}
 
 		if ( empty( $ret['result'] ) || 'success' !== $ret['result'] ) {
-			return new WP_Error( 'dtc_wpvivid', 'WPvivid rejected the S3 settings: ' . ( $ret['error'] ?? 'unknown error' ) );
+			return new WP_Error( 'digifix_tc_wpvivid', 'WPvivid rejected the S3 settings: ' . ( $ret['error'] ?? 'unknown error' ) );
 		}
 
 		if ( ! $id ) {
-			DTC_Settings::update( array( 's3_remote_id' => '' ) );
+			Digifix_TC_Settings::update( array( 's3_remote_id' => '' ) );
 			$remote = self::get_remote();
 			$id     = $remote ? $remote['id'] : '';
 		}
 		WPvivid_Setting::update_user_history( 'remote_selected', array( $id ) );
-		DTC_Settings::update( array( 's3_remote_id' => $id ) );
+		Digifix_TC_Settings::update( array( 's3_remote_id' => $id ) );
 
 		self::disable_own_schedule();
 		return true;
@@ -182,11 +182,11 @@ class DTC_WPvivid {
 	public static function start_backup( $keep_local = false ) {
 		global $wpvivid_plugin, $wpdb;
 		if ( ! self::is_available() ) {
-			return new WP_Error( 'dtc_wpvivid', 'WPvivid Backup is not active.' );
+			return new WP_Error( 'digifix_tc_wpvivid', 'WPvivid Backup is not active.' );
 		}
 		$remote = self::get_remote();
 		if ( ! $remote ) {
-			return new WP_Error( 'dtc_wpvivid', 'No S3 remote configured in TotalCare settings.' );
+			return new WP_Error( 'digifix_tc_wpvivid', 'No S3 remote configured in TotalCare settings.' );
 		}
 		$remote_id = $remote['id'];
 		unset( $remote['id'] );
@@ -201,18 +201,18 @@ class DTC_WPvivid {
 				'lock'           => 0,
 				// Keep TotalCare's own log/job tables out of the backup so a
 				// restore does not rewind the running update job.
-				'exclude-tables' => array( $wpdb->prefix . 'dtc_jobs', $wpdb->prefix . 'dtc_events' ),
+				'exclude-tables' => array( $wpdb->prefix . 'digifix_tc_jobs', $wpdb->prefix . 'digifix_tc_events' ),
 				// Guardian state and rollback copies must not be overwritten by a
 				// restore (and the copies would bloat every backup).
 				'exclude_files'  => array(
-					array( 'type' => 'folder', 'path' => WP_CONTENT_DIR . '/dtc-data' ),
-					array( 'type' => 'folder', 'path' => WP_CONTENT_DIR . '/dtc-rollback' ),
+					array( 'type' => 'folder', 'path' => WP_CONTENT_DIR . '/digifix-tc-data' ),
+					array( 'type' => 'folder', 'path' => WP_CONTENT_DIR . '/digifix-tc-rollback' ),
 				),
 			)
 		);
 
 		if ( empty( $ret['result'] ) || 'success' !== $ret['result'] ) {
-			$code = self::is_backup_running() ? 'dtc_wpvivid_busy' : 'dtc_wpvivid';
+			$code = self::is_backup_running() ? 'digifix_tc_wpvivid_busy' : 'digifix_tc_wpvivid';
 			return new WP_Error( $code, $ret['error'] ?? 'WPvivid could not create the backup task.' );
 		}
 
@@ -225,14 +225,14 @@ class DTC_WPvivid {
 	}
 
 	public static function trigger( $task_id ) {
-		DTC_Storage::loopback( 'dtc_run_wpvivid', array( 'task_id' => $task_id ) );
+		Digifix_TC_Storage::loopback( 'digifix_tc_run_wpvivid', array( 'task_id' => $task_id ) );
 	}
 
 	/** Signed loopback that runs a WPvivid backup task (WPvivid ends the request). */
 	public static function ajax_run_task() {
 		$ts  = isset( $_POST['ts'] ) ? (int) $_POST['ts'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		$sig = isset( $_POST['sig'] ) ? sanitize_text_field( wp_unslash( $_POST['sig'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		if ( ! DTC_Storage::verify( 'dtc_run_wpvivid', $ts, $sig ) ) {
+		if ( ! Digifix_TC_Storage::verify( 'digifix_tc_run_wpvivid', $ts, $sig ) ) {
 			wp_send_json( array( 'ok' => false ), 403 );
 		}
 		self::run_task_if_ready( sanitize_key( wp_unslash( $_POST['task_id'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
@@ -307,8 +307,8 @@ class DTC_WPvivid {
 				if ( $waiting > 20 * MINUTE_IN_SECONDS ) {
 					return array( 'status' => 'failed', 'error' => 'WPvivid never started the backup task (still "ready" after 20 minutes). Loopback requests to admin-ajax.php or WP-Cron are not running on this server.', 'progress' => '' );
 				}
-				if ( $waiting > 5 * MINUTE_IN_SECONDS && ! get_transient( 'dtc_rekick_' . $task_id ) ) {
-					set_transient( 'dtc_rekick_' . $task_id, 1, HOUR_IN_SECONDS );
+				if ( $waiting > 5 * MINUTE_IN_SECONDS && ! get_transient( 'digifix_tc_rekick_' . $task_id ) ) {
+					set_transient( 'digifix_tc_rekick_' . $task_id, 1, HOUR_IN_SECONDS );
 					self::trigger( $task_id );
 				}
 				return array( 'status' => 'running', 'error' => '', 'progress' => 'Waiting for WPvivid to start (' . human_time_diff( time() - $waiting ) . ')' );
@@ -378,10 +378,10 @@ class DTC_WPvivid {
 	public static function ensure_local_files( $backup_id ) {
 		$backup = self::get_backup( $backup_id );
 		if ( ! $backup ) {
-			return new WP_Error( 'dtc_wpvivid', 'Backup ' . $backup_id . ' is not in the WPvivid backup list.' );
+			return new WP_Error( 'digifix_tc_wpvivid', 'Backup ' . $backup_id . ' is not in the WPvivid backup list.' );
 		}
 		if ( ! class_exists( 'WPvivid_Backup_Item' ) ) {
-			return new WP_Error( 'dtc_wpvivid', 'WPvivid backup classes not loaded.' );
+			return new WP_Error( 'digifix_tc_wpvivid', 'WPvivid backup classes not loaded.' );
 		}
 		$item  = new WPvivid_Backup_Item( $backup );
 		$files = isset( $backup['backup']['files'] ) ? (array) $backup['backup']['files'] : array();
@@ -403,7 +403,7 @@ class DTC_WPvivid {
 			);
 			clearstatcache();
 			if ( ! file_exists( $path ) || filesize( $path ) != $file['size'] ) { // phpcs:ignore Universal.Operators.StrictComparisons.LooseNotEqual
-				return new WP_Error( 'dtc_wpvivid', 'Could not download ' . $file['file_name'] . ' from remote storage.' );
+				return new WP_Error( 'digifix_tc_wpvivid', 'Could not download ' . $file['file_name'] . ' from remote storage.' );
 			}
 		}
 		return true;

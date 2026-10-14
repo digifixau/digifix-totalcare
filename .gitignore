@@ -4,3 +4,4 @@ wpvivid-backuprestore/
 .DS_Store
 digifix-totalcare/vendor/
 digifix-totalcare/composer.lock
+/build/

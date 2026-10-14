@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Util {
+class Digifix_TC_Bk_Util {
 
 	const FORMAT = 1;
 
@@ -21,11 +21,11 @@ class DTC_Bk_Util {
 	 * ------------------------------------------------------------------ */
 
 	public static function data_dir() {
-		return WP_CONTENT_DIR . '/dtc-data';
+		return WP_CONTENT_DIR . '/digifix-tc-data';
 	}
 
 	/**
-	 * Random-named work folder inside dtc-data. Nginx ignores .htaccess, and
+	 * Random-named work folder inside digifix-tc-data. Nginx ignores .htaccess, and
 	 * spool files contain database bytes, so the name must not be guessable.
 	 */
 	public static function work_dir() {
@@ -35,13 +35,13 @@ class DTC_Bk_Util {
 		if ( ! preg_match( '/^bk-[a-f0-9]{24}$/', $name ) ) {
 			$name = 'bk-' . self::random_hex( 12 );
 			if ( ! is_dir( $base ) ) {
-				@mkdir( $base, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				@mkdir( $base, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 			}
 			file_put_contents( $file, $name );
 		}
 		$dir = $base . '/' . $name;
 		if ( ! is_dir( $dir ) ) {
-			@mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
 		return $dir;
@@ -51,14 +51,14 @@ class DTC_Bk_Util {
 	public static function run_dir( $name ) {
 		$dir = self::work_dir() . '/' . preg_replace( '/[^A-Za-z0-9_-]/', '', $name );
 		if ( ! is_dir( $dir ) ) {
-			@mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
 		}
 		return $dir;
 	}
 
 	public static function rrmdir( $dir ) {
 		if ( ! is_dir( $dir ) || is_link( $dir ) ) {
-			return is_link( $dir ) ? @unlink( $dir ) : true; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			return is_link( $dir ) ? @unlink( $dir ) : true; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 		}
 		foreach ( (array) @scandir( $dir ) as $item ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			if ( '.' === $item || '..' === $item || '' === $item ) {
@@ -68,10 +68,10 @@ class DTC_Bk_Util {
 			if ( is_dir( $path ) && ! is_link( $path ) ) {
 				self::rrmdir( $path );
 			} else {
-				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				wp_delete_file( $path );
 			}
 		}
-		return @rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		return @rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
 	}
 
 	/** Truncate an append-only file back to its last committed length. */
@@ -79,7 +79,7 @@ class DTC_Bk_Util {
 		$length = (int) $length;
 		if ( ! file_exists( $file ) ) {
 			if ( 0 === $length ) {
-				touch( $file );
+				touch( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch
 				return true;
 			}
 			return false;
@@ -131,7 +131,7 @@ class DTC_Bk_Util {
 		if ( false === @file_put_contents( $tmp, $json ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			return false;
 		}
-		return @rename( $tmp, $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		return @rename( $tmp, $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename
 	}
 
 	/* ---------------------------------------------------------------------
@@ -175,7 +175,7 @@ class DTC_Bk_Util {
 
 	/** Raw TotalCare settings with the engine's own defaults. */
 	public static function settings() {
-		$s = get_option( 'dtc_settings', array() );
+		$s = get_option( 'digifix_tc_settings', array() );
 		$s = is_array( $s ) ? $s : array();
 		return array_merge(
 			array(
@@ -221,7 +221,7 @@ class DTC_Bk_Util {
 
 	public static function extend_time_limit() {
 		if ( self::can_set_time_limit() ) {
-			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Squiz.PHP.DiscouragedFunctions.Discouraged -- only during a backup or restore step.
 		}
 		ignore_user_abort( true );
 	}
@@ -238,12 +238,12 @@ class DTC_Bk_Util {
 
 	private static function cipher_key() {
 		$secret = self::site_secret();
-		return $secret ? hash_hmac( 'sha256', 'dtc-s3', $secret, true ) : null;
+		return $secret ? hash_hmac( 'sha256', 'digifix-tc-s3', $secret, true ) : null;
 	}
 
 	/**
 	 * Encrypt the S3 secret for storage in the database. The key lives in
-	 * dtc-data/secret.php, so a leaked database dump or export does not
+	 * digifix-tc-data/secret.php, so a leaked database dump or export does not
 	 * expose the bucket credentials (a compromised server still would).
 	 */
 	public static function encrypt( $plain ) {
@@ -290,10 +290,10 @@ class DTC_Bk_Util {
 
 	/** @return string|null */
 	public static function s3_secret() {
-		if ( defined( 'DTC_S3_SECRET' ) && DTC_S3_SECRET ) {
-			return (string) DTC_S3_SECRET;
+		if ( defined( 'DIGIFIX_TC_S3_SECRET' ) && DIGIFIX_TC_S3_SECRET ) {
+			return (string) DIGIFIX_TC_S3_SECRET;
 		}
-		$stored = get_option( 'dtc_s3_secret', '' );
+		$stored = get_option( 'digifix_tc_s3_secret', '' );
 		return $stored ? self::decrypt( $stored ) : null;
 	}
 

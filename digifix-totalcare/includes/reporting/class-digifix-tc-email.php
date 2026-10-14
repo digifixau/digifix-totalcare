@@ -7,13 +7,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Email {
+class Digifix_TC_Email {
 
 	public static function render( array $mail ) {
-		$brand  = DTC_Settings::get( 'brand_color' );
-		$client = DTC_Settings::get( 'client_name' );
+		$brand  = Digifix_TC_Settings::get( 'brand_color' );
+		$client = Digifix_TC_Settings::get( 'client_name' );
 		ob_start();
-		include DTC_DIR . 'templates/email.php';
+		include DIGIFIX_TC_DIR . 'templates/email.php';
 		return (string) ob_get_clean();
 	}
 

@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Db_Dump {
+class Digifix_TC_Bk_Db_Dump {
 
 	const BATCH_BYTES = 2097152;
 	const STMT_BYTES  = 524288;
@@ -30,7 +30,7 @@ class DTC_Bk_Db_Dump {
 	/** @var mysqli */
 	private $db;
 
-	/** @var DTC_Bk_Gz_Writer */
+	/** @var Digifix_TC_Bk_Gz_Writer */
 	private $w;
 
 	private $st;
@@ -39,7 +39,7 @@ class DTC_Bk_Db_Dump {
 		global $wpdb;
 		$dbh = $wpdb->dbh;
 		if ( ! ( $dbh instanceof mysqli ) ) {
-			throw new DTC_Bk_Exception( 'The database connection is not MySQL/MariaDB via mysqli (SQLite and custom database drop-ins are not supported).' );
+			throw new Digifix_TC_Bk_Exception( 'The database connection is not MySQL/MariaDB via mysqli (SQLite and custom database drop-ins are not supported).' );
 		}
 		return $dbh;
 	}
@@ -56,7 +56,7 @@ class DTC_Bk_Db_Dump {
 		global $wpdb;
 		$db       = self::connection();
 		$prefix   = $wpdb->prefix;
-		$excluded = array_merge( $excluded, array( $prefix . 'dtc_jobs', $prefix . 'dtc_events' ) );
+		$excluded = array_merge( $excluded, array( $prefix . 'digifix_tc_jobs', $prefix . 'digifix_tc_events' ) );
 
 		$info = array();
 		$res  = $db->query( 'SELECT TABLE_NAME, AVG_ROW_LENGTH, TABLE_ROWS, DATA_LENGTH FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()' );
@@ -71,7 +71,7 @@ class DTC_Bk_Db_Dump {
 		$warnings = array();
 		$res      = $db->query( 'SHOW FULL TABLES' );
 		if ( ! $res ) {
-			throw new DTC_Bk_Exception( 'Could not list database tables: ' . $db->error );
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Could not list database tables: ' . $db->error ) );
 		}
 		while ( $row = $res->fetch_row() ) { // phpcs:ignore WordPress.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition
 			$name = $row[0];
@@ -110,7 +110,7 @@ class DTC_Bk_Db_Dump {
 		);
 	}
 
-	public function __construct( DTC_Bk_Gz_Writer $writer, array $state ) {
+	public function __construct( Digifix_TC_Bk_Gz_Writer $writer, array $state ) {
 		$this->db = self::connection();
 		$this->w  = $writer;
 		$this->st = $state;
@@ -151,7 +151,7 @@ class DTC_Bk_Db_Dump {
 	private function query( $sql ) {
 		$res = $this->db->query( $sql );
 		if ( false === $res ) {
-			throw new DTC_Bk_Exception( 'Database error during backup: ' . $this->db->error . ' [' . substr( $sql, 0, 200 ) . ']' );
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Database error during backup: ' . $this->db->error . ' [' . substr( $sql, 0, 200 ) . ']' ) );
 		}
 		return $res;
 	}

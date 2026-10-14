@@ -1,6 +1,6 @@
 # Digifix TotalCare
 
-A WordPress plugin, installed on each client site, that runs routine maintenance by itself:
+A WordPress plugin, installed on each client site, that runs routine maintenance by itself. This file is for developers; the WordPress.org listing is generated from [readme.txt](readme.txt).
 
 - **Scheduled backups** to Amazon S3, Cloudflare R2 or another S3-compatible service, with TotalCare's own engine:
   - a full backup once a week (configurable), and in between only the files that changed; the database is saved in full every time;
@@ -21,7 +21,7 @@ A WordPress plugin, installed on each client site, that runs routine maintenance
 
 ## Requirements
 
-- WordPress 6.0 or later and PHP 7.4 or later. Single-site installs only; multisite is not supported.
+- WordPress 6.2 or later and PHP 7.4 or later. Single-site installs only; multisite is not supported.
 - PHP extensions `zlib`, `mysqli`, `hash`, `json`, and `openssl` or `sodium` (the dashboard checks them). MySQL or MariaDB through `mysqli`; SQLite and custom database drop-ins are not supported.
 - A bucket on Amazon S3, Cloudflare R2 or another S3-compatible service, with a key that can upload, download, list and delete. Each site needs its own folder in the bucket. Don't add lifecycle rules that expire objects: an incremental backup still needs older files.
 - **Wordfence Security** (free), tested with 9.0.2.
@@ -38,44 +38,45 @@ A WordPress plugin, installed on each client site, that runs routine maintenance
 ## Install
 
 1. Copy the `digifix-totalcare` folder to `wp-content/plugins/`.
-2. Optional, for PDF reports: run `composer install --no-dev` in the plugin folder. A release zip should include `vendor/`.
+2. Optional, for PDF reports: run `composer install --no-dev` in the plugin folder. The release zip already includes `vendor/`.
 3. Activate the plugin. Activation:
-   - creates the tables `wp_dtc_jobs` and `wp_dtc_events`;
-   - creates `wp-content/dtc-data/` and `wp-content/dtc-rollback/`;
-   - installs the guardian mu-plugin, `wp-content/mu-plugins/dtc-guardian.php`.
-     If `mu-plugins` is read-only (on some Hostinger plans it links to a host-managed folder), the guardian is loaded instead through the WordPress drop-in `wp-content/fatal-error-handler.php`, from `wp-content/dtc-data/dtc-guardian.php`. If another plugin already uses that drop-in, the dashboard shows the guardian as missing.
+   - creates the tables `wp_digifix_tc_jobs` and `wp_digifix_tc_events`;
+   - creates `wp-content/digifix-tc-data/` and `wp-content/digifix-tc-rollback/`;
+   - installs the guardian mu-plugin, `wp-content/mu-plugins/digifix-tc-guardian.php`.
+     If `mu-plugins` is read-only (on some Hostinger plans it links to a host-managed folder), the guardian is loaded instead through the WordPress drop-in `wp-content/fatal-error-handler.php`, from `wp-content/digifix-tc-data/digifix-tc-guardian.php`. If another plugin already uses that drop-in, the dashboard shows the guardian as missing.
    - adds a `noabort` rule for LiteSpeed to `.htaccess` (only applies under LiteSpeed; see [Background requests](#background-requests)).
-4. Go to **TotalCare → Settings → Remote storage** and enter the bucket details. When you save, TotalCare tests upload, download, list, multipart upload and delete with a small file. The secret key is stored encrypted, with a key kept in `wp-content/dtc-data/secret.php`. You can also define `DTC_S3_SECRET` in `wp-config.php` instead.
+4. Go to **TotalCare → Settings → Remote storage** and enter the bucket details. When you save, TotalCare tests upload, download, list, multipart upload and delete with a small file. The secret key is stored encrypted, with a key kept in `wp-content/digifix-tc-data/secret.php`. You can also define `DIGIFIX_TC_S3_SECRET` in `wp-config.php` instead.
 
 ## Releasing an update
 
-Sites update themselves from GitHub Releases. They need version 1.0.4 or later installed once by hand; after that, updates are automatic.
+Sites get updates from the WordPress.org plugin directory, like any other plugin.
 
-1. Bump the version in `digifix-totalcare.php`, in both the `Version:` header and `DTC_VERSION`.
+1. Bump the version in three places: the `Version:` header and `DIGIFIX_TC_VERSION` in `digifix-totalcare.php`, and `Stable tag:` in `readme.txt`. Add a changelog entry to `readme.txt`, and update `Tested up to:` when a new WordPress version is out.
 2. Commit, tag and push:
    ```bash
-   git commit -am "Release 1.0.5"
-   git tag v1.0.5
+   git commit -am "Release 1.2.1"
+   git tag v1.2.1
    git push origin main
-   git push origin v1.0.5   # push the tag on its own; pushing it with the branch can skip the release run
+   git push origin v1.2.1   # push the tag on its own; pushing it with the branch can skip the release run
    ```
 3. GitHub Actions (`.github/workflows/release.yml`):
    - lints the PHP with PHP 7.4;
-   - checks the tag matches the version in the plugin file;
+   - checks that the three version numbers, and the tag, match;
    - runs `composer install --no-dev` (dompdf);
-   - builds `digifix-totalcare.zip`;
-   - publishes a GitHub Release with the zip attached.
-4. Each site checks GitHub for a new release at most every 6 hours. Go to **Dashboard → Updates → Check again** to check immediately.
-   - The new version shows like any other plugin update.
-   - With "Install new TotalCare releases from GitHub automatically" turned on (Settings → Safe updates, on by default), WordPress's background updater installs it within about 12 hours.
-   - It never installs while a TotalCare job or restore is running.
+   - builds `digifix-totalcare.zip`, leaving out the files listed in `.distignore`;
+   - runs the official Plugin Check on the package and fails on errors;
+   - publishes a GitHub Release with the zip attached;
+   - deploys the package to WordPress.org SVN (trunk and a tag) once the `SVN_USERNAME` and `SVN_PASSWORD` repository secrets are set. Banner, icon and screenshot files go in `.wordpress-org/` at the repository root.
+4. WordPress.org offers the new version to every site within a few hours. If background auto-updates are turned on for TotalCare, WordPress never installs one while a TotalCare job or restore is running.
 
-Every push to `main` also lints the code and uploads a test zip as a workflow artifact, without releasing it.
+Every push to `main` and every pull request also builds the package and runs Plugin Check, and uploads the zip as a workflow artifact without releasing it.
+
+To run Plugin Check locally: install the [Plugin Check](https://wordpress.org/plugins/plugin-check/) plugin on a test site, copy the built package into `wp-content/plugins/`, and run `wp plugin check digifix-totalcare`.
 
 ## How it works
 
 ### Job engine
-- Backups, update runs, scans and restores are stored as jobs in `wp_dtc_jobs`.
+- Backups, update runs, scans and restores are stored as jobs in `wp_digifix_tc_jobs`.
 - They move forward one step at a time on a cron tick every minute, or straight away through a signed loopback request.
 - Only one job runs at a time, so a backup, an update run and a scan never overlap.
 
@@ -115,8 +116,8 @@ A backup runs in this order: `preflight → database → files → finalize → 
   - **Memory:** constant whatever the site's size. Folders are read one at a time, database rows in batches of about 2 MB, and files in 1 MB chunks.
   - **Disk:** about 16 MB of spool space. Archive data is uploaded in 8 MiB parts as soon as each part is full, and no local copy of the backup is kept.
   - **CPU:** media and other already-compressed formats are stored without recompressing. Text and SQL use fast compression (level 3). Database tables are read page by page on their key, without OFFSET.
-- **Database:** every table with the site's prefix, except TotalCare's own (`dtc_jobs`, `dtc_events`) and transients. Views, triggers and stored routines are not backed up; the backup warns when it finds any.
-- **Default exclusions** (editable): cache folders, other backup plugins' folders, `node_modules`, `.git`, logs. `wp-content/dtc-data` and `dtc-rollback` are never backed up.
+- **Database:** every table with the site's prefix, except TotalCare's own (`digifix_tc_jobs`, `digifix_tc_events`) and transients. Views, triggers and stored routines are not backed up; the backup warns when it finds any.
+- **Default exclusions** (editable): cache folders, other backup plugins' folders, `node_modules`, `.git`, logs. `wp-content/digifix-tc-data` and `digifix-tc-rollback` are never backed up.
 - **Folder ownership.** `site.json` records the home URL. A site whose address doesn't match refuses to write or prune in that folder, so a staging copy can't overwrite or delete the live site's backups. Use **Backups → Take over this folder** after a real domain change.
 - **Retention** runs after each backup and once a day. It keeps:
   - the newest *N* backups;
@@ -128,7 +129,7 @@ A backup runs in this order: `preflight → database → files → finalize → 
   Every backup that a kept backup depends on is also kept. Incomplete backups older than two days and abandoned multipart uploads are removed.
 
 ### Restores
-Restores are driven by the guardian, before regular plugins and the theme load. A broken plugin can't stop a restore, and nothing needs to be deactivated. The guardian loads a copy of the restore engine pinned in `wp-content/dtc-data/engine/<version>/`, so a broken TotalCare update can't stop one either.
+Restores are driven by the guardian, before regular plugins and the theme load. A broken plugin can't stop a restore, and nothing needs to be deactivated. The guardian loads a copy of the restore engine pinned in `wp-content/digifix-tc-data/engine/<version>/`, so a broken TotalCare update can't stop one either.
 
 `preflight → plan → database import → files → clean → swap → finish`
 
@@ -136,7 +137,7 @@ Restores are driven by the guardian, before regular plugins and the theme load. 
 - **Database.** It is imported into temporary tables (`dtcr_*`) while the site stays online. They then replace the live tables in one atomic `RENAME TABLE`. The replaced tables are kept as `dtcold_*` until the restored site passes its health check, or for 24 hours.
 - **Maintenance page.** It is shown only while code files and tables are being switched; uploads are restored while the site is up. The guardian serves the maintenance page itself (HTTP 503, not cached), and every request that reaches it also restarts a stalled restore. The admin notice links to a progress page that keeps working during maintenance.
 - **Never restored:**
-  - TotalCare itself, the guardian and `dtc-data`;
+  - TotalCare itself, the guardian and `digifix-tc-data`;
   - `wp-config.php`;
   - `.htaccess`, unless you tick the option;
   - on another server, also host-specific files: `object-cache.php`, `advanced-cache.php`, `db.php`, `.user.ini`, `php.ini`, `wordfence-waf.php` and `wflogs`.
@@ -154,7 +155,7 @@ The steps run in this order:
 
 `preflight → backup (incremental, to remote storage) → baseline health check → for each item: snapshot → update → health check → (rollback if needed) → core → final check → report`
 
-- **Snapshots.** Before each item is updated, its folder is copied to `wp-content/dtc-rollback/<job>/`.
+- **Snapshots.** Before each item is updated, its folder is copied to `wp-content/digifix-tc-rollback/<job>/`.
 - **Blocked versions.** A version that broke the site isn't installed again until a newer release comes out. Clear this list from the dashboard.
 - **Health checks.** Each check is a separate HTTP request to the home page, the login page and any extra URLs you add.
   - **Hard failures** cause a rollback: a status of 500 or higher, a page that was 200 now returning an error, PHP fatal or parse errors, the WordPress "critical error" screen, a database connection error, truncated output, or a PHP fatal recorded by the guardian.
@@ -165,15 +166,15 @@ The steps run in this order:
 - Records PHP fatal errors.
 - If a fatal happens while an update is in progress, it swaps the snapshot back right away, so the site recovers even if no request can finish.
 - Drives restores before other plugins load, serves the maintenance page during a restore, and restarts a stalled restore (see [Restores](#restores)).
-- State is kept in `wp-content/dtc-data/`, not in the database, so it survives the restore.
+- State is kept in `wp-content/digifix-tc-data/`, not in the database, so it survives the restore.
 - TotalCare's own tables are excluded from backups, so a restore doesn't rewind the job or the log.
 
 ## Webhook format
 
 ```json
 POST <webhook url>
-X-DTC-Event: update.rolled_back
-X-DTC-Signature: sha256=<hmac of body with the webhook secret>
+X-Digifix-TC-Event: update.rolled_back
+X-Digifix-TC-Signature: sha256=<hmac of body with the webhook secret>
 
 { "event": "update.rolled_back", "site": "…", "site_url": "…", "client": "…",
   "time": "2026-10-05T03:12:00+00:00", "job_id": 42, "data": { … } }
@@ -202,9 +203,8 @@ wp totalcare prune                    apply the retention settings now
 
 ## Moving from WPvivid
 
-- Updating to 1.1.0 copies the S3 key from WPvivid once and switches backups to the built-in engine. The first new backup is a full one.
-- Old WPvivid backups stay where they are and can still be restored from WPvivid, including from Cloudflare R2. While WPvivid is active, **Settings → Backup engine** can switch a site back to WPvivid.
-- Once a site has enough built-in backups, uninstall WPvivid and delete its old backups from the bucket by hand.
+- Old WPvivid backups stay where they are and can still be restored from WPvivid, including from Cloudflare R2. While WPvivid is active, **Settings → Backup engine** can switch a site to WPvivid as a legacy engine.
+- TotalCare's first built-in backup is a full one. Once a site has enough built-in backups, uninstall WPvivid and delete its old backups from the bucket by hand.
 
 ## Testing checklist
 

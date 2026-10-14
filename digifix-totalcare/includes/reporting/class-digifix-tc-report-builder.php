@@ -7,14 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Report_Builder {
+class Digifix_TC_Report_Builder {
 
 	public static function build( DateTimeImmutable $start, DateTimeImmutable $end ) {
 		$utc   = new DateTimeZone( 'UTC' );
 		$since = $start->setTimezone( $utc )->format( 'Y-m-d H:i:s' );
 		$until = $end->setTimezone( $utc )->format( 'Y-m-d H:i:s' );
 
-		$events = DTC_Logger::query(
+		$events = Digifix_TC_Logger::query(
 			array(
 				'since'    => $since,
 				'until'    => $until,
@@ -32,7 +32,7 @@ class DTC_Report_Builder {
 			'site'     => array(
 				'name'       => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 				'url'        => home_url(),
-				'client'     => DTC_Settings::get( 'client_name' ),
+				'client'     => Digifix_TC_Settings::get( 'client_name' ),
 				'wp_version' => get_bloginfo( 'version' ),
 				'php'        => PHP_VERSION,
 			),

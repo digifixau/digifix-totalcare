@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Areas {
+class Digifix_TC_Bk_Areas {
 
 	const ORDER = array( 'core', 'content', 'plugins', 'themes', 'muplugins', 'uploads' );
 
@@ -95,8 +95,8 @@ class DTC_Bk_Areas {
 	/** Physical folders never backed up or restored. */
 	public static function protected_dirs() {
 		return array(
-			untrailingslashit( WP_CONTENT_DIR ) . '/dtc-data',
-			untrailingslashit( WP_CONTENT_DIR ) . '/dtc-rollback',
+			untrailingslashit( WP_CONTENT_DIR ) . '/digifix-tc-data',
+			untrailingslashit( WP_CONTENT_DIR ) . '/digifix-tc-rollback',
 		);
 	}
 

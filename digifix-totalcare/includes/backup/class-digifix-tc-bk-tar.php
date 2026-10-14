@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Tar {
+class Digifix_TC_Bk_Tar {
 
 	const BLOCK    = 512;
 	const MAX_SIZE = 8589934591; // 8 GiB - 1, the ustar size field limit.
@@ -169,7 +169,7 @@ class DTC_Bk_Tar {
  * entry header, each data chunk and each entry end. The position is fully
  * described by state(), so parsing can resume at a member boundary.
  */
-class DTC_Bk_Tar_Parser {
+class Digifix_TC_Bk_Tar_Parser {
 
 	private $buf = '';
 
@@ -227,9 +227,9 @@ class DTC_Bk_Tar_Parser {
 				}
 				$entry             = $this->st['entry'];
 				$this->st['entry'] = null;
-				$this->st['pad']   = in_array( $entry['type'], array( '2', '5' ), true ) ? 0 : DTC_Bk_Tar::pad( $entry['size'] );
+				$this->st['pad']   = in_array( $entry['type'], array( '2', '5' ), true ) ? 0 : Digifix_TC_Bk_Tar::pad( $entry['size'] );
 				if ( 'x' === $entry['type'] ) {
-					$this->st['pax'] = DTC_Bk_Tar::parse_pax( $entry['pax_data'] ?? '' );
+					$this->st['pax'] = Digifix_TC_Bk_Tar::parse_pax( $entry['pax_data'] ?? '' );
 				} elseif ( 'g' !== $entry['type'] ) {
 					call_user_func( $this->on_end, $entry );
 				}
@@ -244,17 +244,17 @@ class DTC_Bk_Tar_Parser {
 				$this->st['pad'] -= $take;
 				continue;
 			}
-			if ( $len - $pos < DTC_Bk_Tar::BLOCK ) {
+			if ( $len - $pos < Digifix_TC_Bk_Tar::BLOCK ) {
 				break;
 			}
-			$hdr  = DTC_Bk_Tar::parse_block( substr( $this->buf, $pos, DTC_Bk_Tar::BLOCK ) );
-			$pos += DTC_Bk_Tar::BLOCK;
+			$hdr  = Digifix_TC_Bk_Tar::parse_block( substr( $this->buf, $pos, Digifix_TC_Bk_Tar::BLOCK ) );
+			$pos += Digifix_TC_Bk_Tar::BLOCK;
 			if ( null === $hdr ) {
 				$this->st['eof'] = true;
 				break;
 			}
 			if ( false === $hdr ) {
-				throw new DTC_Bk_Exception( 'Corrupt tar header in backup archive.' );
+				throw new Digifix_TC_Bk_Exception( 'Corrupt tar header in backup archive.' );
 			}
 			if ( $this->st['pax'] && ! in_array( $hdr['type'], array( 'x', 'g' ), true ) ) {
 				if ( isset( $this->st['pax']['path'] ) ) {

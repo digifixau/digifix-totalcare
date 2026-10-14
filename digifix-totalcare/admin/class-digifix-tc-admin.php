@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Admin {
+class Digifix_TC_Admin {
 
 	const CAP = 'manage_options';
 
@@ -15,33 +15,33 @@ class DTC_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'notices' ) );
-		add_action( 'admin_init', array( 'DTC_Restore', 'reconcile' ) );
+		add_action( 'admin_init', array( 'Digifix_TC_Restore', 'reconcile' ) );
 
 		foreach ( array( 'run', 'cancel', 'restore', 'save_settings', 'test_email', 'test_webhook', 'report', 'clear_skip', 'pin', 'refresh_backups', 'take_over', 'probe' ) as $action ) {
-			add_action( 'admin_post_dtc_' . $action, array( __CLASS__, 'handle_' . $action ) );
+			add_action( 'admin_post_digifix_tc_' . $action, array( __CLASS__, 'handle_' . $action ) );
 		}
-		add_filter( 'plugin_action_links_' . DTC_BASENAME, array( __CLASS__, 'action_links' ) );
+		add_filter( 'plugin_action_links_' . DIGIFIX_TC_BASENAME, array( __CLASS__, 'action_links' ) );
 	}
 
 	public static function menu() {
-		add_menu_page( 'TotalCare', 'TotalCare', self::CAP, 'dtc-dashboard', array( __CLASS__, 'page_dashboard' ), 'dashicons-shield-alt', 3 );
-		add_submenu_page( 'dtc-dashboard', 'TotalCare Dashboard', 'Dashboard', self::CAP, 'dtc-dashboard', array( __CLASS__, 'page_dashboard' ) );
-		add_submenu_page( 'dtc-dashboard', 'TotalCare Backups', 'Backups', self::CAP, 'dtc-backups', array( __CLASS__, 'page_backups' ) );
-		add_submenu_page( 'dtc-dashboard', 'TotalCare Activity Log', 'Activity Log', self::CAP, 'dtc-log', array( __CLASS__, 'page_log' ) );
-		add_submenu_page( 'dtc-dashboard', 'TotalCare Reports', 'Reports', self::CAP, 'dtc-reports', array( __CLASS__, 'page_reports' ) );
-		add_submenu_page( 'dtc-dashboard', 'TotalCare Settings', 'Settings', self::CAP, 'dtc-settings', array( __CLASS__, 'page_settings' ) );
+		add_menu_page( 'TotalCare', 'TotalCare', self::CAP, 'digifix-tc-dashboard', array( __CLASS__, 'page_dashboard' ), 'dashicons-shield-alt', 3 );
+		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Dashboard', 'Dashboard', self::CAP, 'digifix-tc-dashboard', array( __CLASS__, 'page_dashboard' ) );
+		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Backups', 'Backups', self::CAP, 'digifix-tc-backups', array( __CLASS__, 'page_backups' ) );
+		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Activity Log', 'Activity Log', self::CAP, 'digifix-tc-log', array( __CLASS__, 'page_log' ) );
+		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Reports', 'Reports', self::CAP, 'digifix-tc-reports', array( __CLASS__, 'page_reports' ) );
+		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Settings', 'Settings', self::CAP, 'digifix-tc-settings', array( __CLASS__, 'page_settings' ) );
 	}
 
 	public static function action_links( $links ) {
-		array_unshift( $links, '<a href="' . esc_url( admin_url( 'admin.php?page=dtc-settings' ) ) . '">Settings</a>' );
+		array_unshift( $links, '<a href="' . esc_url( admin_url( 'admin.php?page=digifix-tc-settings' ) ) . '">Settings</a>' );
 		return $links;
 	}
 
 	public static function assets( $hook ) {
-		if ( false === strpos( (string) $hook, 'dtc-' ) ) {
+		if ( false === strpos( (string) $hook, 'digifix-tc-' ) ) {
 			return;
 		}
-		wp_enqueue_style( 'dtc-admin', DTC_URL . 'admin/admin.css', array(), DTC_VERSION );
+		wp_enqueue_style( 'digifix-tc-admin', DIGIFIX_TC_URL . 'admin/admin.css', array(), DIGIFIX_TC_VERSION );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -49,36 +49,35 @@ class DTC_Admin {
 	 * ------------------------------------------------------------------ */
 
 	private static function flash( $type, $message ) {
-		set_transient( 'dtc_notice_' . get_current_user_id(), array( $type, $message ), 60 );
+		set_transient( 'digifix_tc_notice_' . get_current_user_id(), array( $type, $message ), 60 );
 	}
 
 	public static function notices() {
-		$notice = get_transient( 'dtc_notice_' . get_current_user_id() );
+		$notice = get_transient( 'digifix_tc_notice_' . get_current_user_id() );
 		if ( $notice ) {
-			delete_transient( 'dtc_notice_' . get_current_user_id() );
+			delete_transient( 'digifix_tc_notice_' . get_current_user_id() );
 			printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $notice[0] ), esc_html( $notice[1] ) );
 		}
 
 		$screen = get_current_screen();
-		if ( ! $screen || false === strpos( $screen->id, 'dtc-' ) ) {
+		if ( ! $screen || false === strpos( $screen->id, 'digifix-tc-' ) ) {
 			return;
 		}
-		if ( DTC_Restore::in_progress() ) {
-			$dtc_url = DTC_Restore::status_url();
-			echo '<div class="notice notice-warning"><p><strong>A site restore is in progress.</strong> Scheduled jobs are paused until it finishes.' . ( $dtc_url ? ' <a href="' . esc_url( $dtc_url ) . '" target="_blank">Follow its progress</a> (this page keeps working while the site shows the maintenance page).' : '' ) . '</p></div>';
+		if ( Digifix_TC_Restore::in_progress() ) {
+			$digifix_tc_url = Digifix_TC_Restore::status_url();
+			echo '<div class="notice notice-warning"><p><strong>A site restore is in progress.</strong> Scheduled jobs are paused until it finishes.' . ( $digifix_tc_url ? ' <a href="' . esc_url( $digifix_tc_url ) . '" target="_blank">Follow its progress</a> (this page keeps working while the site shows the maintenance page).' : '' ) . '</p></div>';
 		}
 	}
 
-	private static function back( $page = 'dtc-dashboard', array $args = array() ) {
+	private static function back( $page = 'digifix-tc-dashboard', array $args = array() ) {
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php?page=' . $page ) ) );
 		exit;
 	}
 
-	private static function guard( $action ) {
+	private static function guard() {
 		if ( ! current_user_can( self::CAP ) ) {
 			wp_die( 'Not allowed.' );
 		}
-		check_admin_referer( $action );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -86,57 +85,61 @@ class DTC_Admin {
 	 * ------------------------------------------------------------------ */
 
 	public static function handle_run() {
-		self::guard( 'dtc_run' );
+		self::guard();
+		check_admin_referer( 'digifix_tc_run' );
 		$type = sanitize_key( $_POST['type'] ?? '' );
 		$map  = array(
-			'backup' => array( 'DTC_Backup_Service', 'Backup' ),
-			'update' => array( 'DTC_Update_Service', 'Update run' ),
-			'scan'   => array( 'DTC_Scan_Service', 'Malware scan' ),
+			'backup' => array( 'Digifix_TC_Backup_Service', 'Backup' ),
+			'update' => array( 'Digifix_TC_Update_Service', 'Update run' ),
+			'scan'   => array( 'Digifix_TC_Scan_Service', 'Malware scan' ),
 		);
 		if ( 'backup' === $type ) {
-			$job = DTC_Backup_Service::queue( 'manual', ! empty( $_POST['full'] ) );
+			$job = Digifix_TC_Backup_Service::queue( 'manual', ! empty( $_POST['full'] ) );
 			self::flash( 'success', ( ! empty( $_POST['full'] ) ? 'Full backup' : 'Backup' ) . ' queued (job #' . ( $job ? $job->id : '?' ) . '). Progress shows on the dashboard.' );
 		} elseif ( isset( $map[ $type ] ) ) {
 			$job = call_user_func( array( $map[ $type ][0], 'queue' ), 'manual' );
 			self::flash( 'success', $map[ $type ][1] . ' queued (job #' . ( $job ? $job->id : '?' ) . '). Progress shows on this page.' );
 		}
-		self::back( sanitize_key( $_POST['return'] ?? '' ) === 'dtc-backups' ? 'dtc-backups' : 'dtc-dashboard' );
+		self::back( sanitize_key( $_POST['return'] ?? '' ) === 'digifix-tc-backups' ? 'digifix-tc-backups' : 'digifix-tc-dashboard' );
 	}
 
 	public static function handle_cancel() {
-		self::guard( 'dtc_cancel' );
-		DTC_Jobs::cancel( (int) ( $_POST['job_id'] ?? 0 ) );
+		self::guard();
+		check_admin_referer( 'digifix_tc_cancel' );
+		Digifix_TC_Jobs::cancel( absint( $_POST['job_id'] ?? 0 ) );
 		self::flash( 'success', 'Job cancelled. Unfinished uploads are removed; a Wordfence scan or WPvivid task that already started finishes on its own.' );
 		self::back();
 	}
 
 	public static function handle_restore() {
-		self::guard( 'dtc_restore' );
+		self::guard();
+		check_admin_referer( 'digifix_tc_restore' );
 		$backup_id = sanitize_text_field( wp_unslash( $_POST['backup_id'] ?? '' ) );
-		$folder    = isset( $_POST['folder'] ) && '' !== $_POST['folder'] ? DTC_Bk_Util::clean_folder( wp_unslash( $_POST['folder'] ) ) : null;
+		$folder    = sanitize_text_field( wp_unslash( $_POST['folder'] ?? '' ) );
+		$folder    = '' !== $folder ? Digifix_TC_Bk_Util::clean_folder( $folder ) : null;
 
-		if ( 'wpvivid' === ( $_POST['engine'] ?? '' ) ) {
-			if ( ! DTC_WPvivid::get_backup( $backup_id ) ) {
+		if ( 'wpvivid' === sanitize_key( wp_unslash( $_POST['engine'] ?? '' ) ) ) {
+			if ( ! Digifix_TC_WPvivid::get_backup( $backup_id ) ) {
 				self::flash( 'error', 'Backup not found.' );
 				self::back();
 			}
-			DTC_Restore::start_manual( $backup_id, array( 'engine' => 'wpvivid' ) );
-			DTC_Jobs::kick();
+			Digifix_TC_Restore::start_manual( $backup_id, array( 'engine' => 'wpvivid' ) );
+			Digifix_TC_Jobs::kick();
 			self::flash( 'warning', 'Restore of WPvivid backup ' . $backup_id . ' queued. The site will be briefly unavailable while it runs.' );
 			self::back();
 		}
 
-		if ( ! DTC_Bk_Remote::parse_id( $backup_id ) ) {
+		if ( ! Digifix_TC_Bk_Remote::parse_id( $backup_id ) ) {
 			self::flash( 'error', 'Invalid backup id.' );
-			self::back( 'dtc-backups' );
+			self::back( 'digifix-tc-backups' );
 		}
-		$scope = array_values( array_intersect( DTC_Restore::ALL_SCOPE, array_map( 'sanitize_key', (array) ( $_POST['scope'] ?? array() ) ) ) );
+		$scope = array_values( array_intersect( Digifix_TC_Restore::ALL_SCOPE, array_map( 'sanitize_key', (array) ( $_POST['scope'] ?? array() ) ) ) );
 		if ( ! $scope ) {
 			self::flash( 'error', 'Choose at least one part of the site to restore.' );
-			self::back( 'dtc-backups', $folder ? array( 'folder' => $folder ) : array() );
+			self::back( 'digifix-tc-backups', $folder ? array( 'folder' => $folder ) : array() );
 		}
 		$paths = array_filter( array_map( 'trim', preg_split( '/\R/', sanitize_textarea_field( wp_unslash( $_POST['paths'] ?? '' ) ) ) ) );
-		DTC_Restore::start_manual(
+		Digifix_TC_Restore::start_manual(
 			$backup_id,
 			array(
 				'scope'    => $scope,
@@ -151,45 +154,49 @@ class DTC_Admin {
 				'folder'   => $folder,
 			)
 		);
-		DTC_Jobs::kick();
+		Digifix_TC_Jobs::kick();
 		self::flash( 'warning', 'Restore of backup ' . $backup_id . ' queued. It starts within a minute; a link to follow its progress appears at the top of this page.' );
-		self::back( 'dtc-backups' );
+		self::back( 'digifix-tc-backups' );
 	}
 
 	public static function handle_pin() {
-		self::guard( 'dtc_pin' );
+		self::guard();
+		check_admin_referer( 'digifix_tc_pin' );
 		$id     = sanitize_text_field( wp_unslash( $_POST['backup_id'] ?? '' ) );
-		$remote = DTC_Bk_Remote::from_settings();
-		$res    = is_wp_error( $remote ) ? $remote : ( DTC_Bk_Remote::parse_id( $id ) ? $remote->pin( $id, ! empty( $_POST['pinned'] ) ) : new WP_Error( 'dtc', 'Invalid backup id.' ) );
+		$remote = Digifix_TC_Bk_Remote::from_settings();
+		$res    = is_wp_error( $remote ) ? $remote : ( Digifix_TC_Bk_Remote::parse_id( $id ) ? $remote->pin( $id, ! empty( $_POST['pinned'] ) ) : new WP_Error( 'digifix_tc', 'Invalid backup id.' ) );
 		self::flash( is_wp_error( $res ) ? 'error' : 'success', is_wp_error( $res ) ? $res->get_error_message() : ( ! empty( $_POST['pinned'] ) ? 'Backup pinned: it is never deleted by retention.' : 'Backup unpinned.' ) );
 		self::clear_catalog_cache();
-		self::back( 'dtc-backups' );
+		self::back( 'digifix-tc-backups' );
 	}
 
 	public static function handle_refresh_backups() {
-		self::guard( 'dtc_refresh_backups' );
-		$folder = isset( $_POST['folder'] ) && '' !== $_POST['folder'] ? DTC_Bk_Util::clean_folder( wp_unslash( $_POST['folder'] ) ) : null;
-		$remote = DTC_Bk_Remote::from_settings( $folder );
+		self::guard();
+		check_admin_referer( 'digifix_tc_refresh_backups' );
+		$folder = sanitize_text_field( wp_unslash( $_POST['folder'] ?? '' ) );
+		$folder = '' !== $folder ? Digifix_TC_Bk_Util::clean_folder( $folder ) : null;
+		$remote = Digifix_TC_Bk_Remote::from_settings( $folder );
 		$res    = is_wp_error( $remote ) ? $remote : $remote->rebuild_catalog();
 		self::clear_catalog_cache();
 		self::flash( is_wp_error( $res ) ? 'error' : 'success', is_wp_error( $res ) ? $res->get_error_message() : 'Backup list rebuilt from storage (' . count( $res ) . ' backups).' );
-		self::back( 'dtc-backups', $folder ? array( 'folder' => $folder ) : array() );
+		self::back( 'digifix-tc-backups', $folder ? array( 'folder' => $folder ) : array() );
 	}
 
 	public static function handle_take_over() {
-		self::guard( 'dtc_take_over' );
-		$remote = DTC_Bk_Remote::from_settings();
+		self::guard();
+		check_admin_referer( 'digifix_tc_take_over' );
+		$remote = Digifix_TC_Bk_Remote::from_settings();
 		$res    = is_wp_error( $remote ) ? $remote : $remote->claim();
 		if ( ! is_wp_error( $res ) ) {
-			DTC_Logger::log( 'system', 'warning', 'system.folder_claimed', 'Backup folder "' . $remote->folder . '" taken over by ' . home_url() . '.' );
+			Digifix_TC_Logger::log( 'system', 'warning', 'system.folder_claimed', 'Backup folder "' . $remote->folder . '" taken over by ' . home_url() . '.' );
 		}
 		self::flash( is_wp_error( $res ) ? 'error' : 'success', is_wp_error( $res ) ? $res->get_error_message() : 'This site now owns the backup folder.' );
-		self::back( 'dtc-backups' );
+		self::back( 'digifix-tc-backups' );
 	}
 
 	/** Backup lists are cached for a few minutes; bumping the version drops them. */
 	public static function clear_catalog_cache() {
-		update_option( 'dtc_catalog_ver', time(), false );
+		update_option( 'digifix_tc_catalog_ver', time(), false );
 	}
 
 	/**
@@ -197,8 +204,8 @@ class DTC_Admin {
 	 *
 	 * @return array|WP_Error
 	 */
-	public static function catalog( DTC_Bk_Remote $remote ) {
-		$key     = 'dtc_catalog_' . md5( $remote->folder . '|' . get_option( 'dtc_catalog_ver', 0 ) );
+	public static function catalog( Digifix_TC_Bk_Remote $remote ) {
+		$key     = 'digifix_tc_catalog_' . md5( $remote->folder . '|' . get_option( 'digifix_tc_catalog_ver', 0 ) );
 		$entries = get_transient( $key );
 		if ( ! is_array( $entries ) ) {
 			$entries = $remote->catalog();
@@ -211,40 +218,45 @@ class DTC_Admin {
 	}
 
 	public static function handle_probe() {
-		self::guard( 'dtc_probe' );
-		$res = DTC_Plugin::probe_background_requests();
+		self::guard();
+		check_admin_referer( 'digifix_tc_probe' );
+		$res = Digifix_TC_Plugin::probe_background_requests();
 		self::flash( $res['ok'] ? 'success' : 'error', $res['message'] );
-		self::back( 'dtc-settings' );
+		self::back( 'digifix-tc-settings' );
 	}
 
 	public static function handle_clear_skip() {
-		self::guard( 'dtc_clear_skip' );
-		delete_option( DTC_Update_Service::SKIP_OPTION );
+		self::guard();
+		check_admin_referer( 'digifix_tc_clear_skip' );
+		delete_option( Digifix_TC_Update_Service::SKIP_OPTION );
 		self::flash( 'success', 'Blocked versions cleared; they will be retried in the next update run.' );
 		self::back();
 	}
 
 	public static function handle_test_email() {
-		self::guard( 'dtc_test_email' );
-		DTC_Notifier::notify( 'test' );
+		self::guard();
+		check_admin_referer( 'digifix_tc_test_email' );
+		Digifix_TC_Notifier::notify( 'test' );
 		self::flash( 'success', 'Test email sent to the internal and client recipients. Check the Activity Log if it does not arrive.' );
-		self::back( 'dtc-settings' );
+		self::back( 'digifix-tc-settings' );
 	}
 
 	public static function handle_test_webhook() {
-		self::guard( 'dtc_test_webhook' );
-		$ok = DTC_Webhook::send( 'test', array( 'message' => 'Webhook delivery from Digifix TotalCare works.' ) );
+		self::guard();
+		check_admin_referer( 'digifix_tc_test_webhook' );
+		$ok = Digifix_TC_Webhook::send( 'test', array( 'message' => 'Webhook delivery from Digifix TotalCare works.' ) );
 		self::flash( $ok ? 'success' : 'error', $ok ? 'Webhook delivered.' : 'Webhook failed; see the Activity Log.' );
-		self::back( 'dtc-settings' );
+		self::back( 'digifix-tc-settings' );
 	}
 
 	public static function handle_save_settings() {
-		self::guard( 'dtc_save_settings' );
-		$input  = wp_unslash( (array) ( $_POST['dtc'] ?? array() ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized in DTC_Settings::sanitize().
-		$before = DTC_Settings::all();
-		$after  = DTC_Settings::sanitize( $input );
-		update_option( DTC_Settings::OPTION, $after, false );
-		DTC_Scheduler::reschedule();
+		self::guard();
+		check_admin_referer( 'digifix_tc_save_settings' );
+		$input  = wp_unslash( (array) ( $_POST['digifix_tc'] ?? array() ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized in Digifix_TC_Settings::sanitize().
+		$before = Digifix_TC_Settings::all();
+		$after  = Digifix_TC_Settings::sanitize( $input );
+		update_option( Digifix_TC_Settings::OPTION, $after, false );
+		Digifix_TC_Scheduler::reschedule();
 
 		$secret     = isset( $input['s3_secret'] ) ? trim( (string) $input['s3_secret'] ) : '';
 		$s3_changed = false;
@@ -253,72 +265,74 @@ class DTC_Admin {
 		}
 
 		if ( '' !== $secret ) {
-			DTC_Storage::secret();
-			$stored = DTC_Bk_Util::encrypt( $secret );
+			Digifix_TC_Storage::secret();
+			$stored = Digifix_TC_Bk_Util::encrypt( $secret );
 			if ( '' === $stored ) {
 				self::flash( 'error', 'Settings saved, but the S3 secret could not be stored: PHP has neither OpenSSL nor Sodium.' );
-				self::back( 'dtc-settings' );
+				self::back( 'digifix-tc-settings' );
 			}
-			update_option( 'dtc_s3_secret', $stored, false );
+			update_option( 'digifix_tc_s3_secret', $stored, false );
 		}
 
 		$notes = array();
 		$level = 'success';
 		if ( ( '' !== $secret || $s3_changed ) && $after['s3_access'] && $after['s3_bucket'] ) {
 			if ( 'amazons3' === $after['s3_type'] ) {
-				$region = DTC_Bk_S3::detect_region( $after['s3_bucket'] );
+				$region = Digifix_TC_Bk_S3::detect_region( $after['s3_bucket'] );
 				if ( $region && $region !== $after['s3_region'] ) {
 					$after['s3_region'] = $region;
-					update_option( DTC_Settings::OPTION, $after, false );
+					update_option( Digifix_TC_Settings::OPTION, $after, false );
 				}
 			}
-			$remote = DTC_Bk_Remote::from_settings();
+			$remote = Digifix_TC_Bk_Remote::from_settings();
 			$test   = is_wp_error( $remote ) ? $remote : $remote->test();
 			if ( is_wp_error( $test ) ) {
 				$level   = 'error';
 				$notes[] = 'Settings saved, but the storage connection does not work yet: ' . $test->get_error_message();
 			} else {
 				$owner = $remote->check_owner();
-				DTC_Logger::log( 'system', 'success', 'system.s3_configured', 'Remote storage tested: bucket ' . $after['s3_bucket'] . ', folder ' . $remote->folder . '.' );
+				Digifix_TC_Logger::log( 'system', 'success', 'system.s3_configured', 'Remote storage tested: bucket ' . $after['s3_bucket'] . ', folder ' . $remote->folder . '.' );
 				$notes[] = 'Settings saved. Storage connection tested (upload, download, list, multipart, delete).';
 				if ( is_wp_error( $owner ) ) {
 					$level   = 'warning';
 					$notes[] = $owner->get_error_message();
 				}
 			}
-			if ( '' !== $secret && 'wpvivid' === $after['backup_engine'] && DTC_WPvivid::is_available() ) {
-				$res = DTC_WPvivid::configure_remote( $after, $secret );
+			if ( '' !== $secret && 'wpvivid' === $after['backup_engine'] && Digifix_TC_WPvivid::is_available() ) {
+				$res = Digifix_TC_WPvivid::configure_remote( $after, $secret );
 				if ( is_wp_error( $res ) ) {
 					$level   = 'error';
 					$notes[] = 'WPvivid was not configured: ' . $res->get_error_message();
 				}
 			}
-		} elseif ( $s3_changed && ! DTC_Bk_Util::s3_secret() ) {
+		} elseif ( $s3_changed && ! Digifix_TC_Bk_Util::s3_secret() ) {
 			$level   = 'warning';
 			$notes[] = 'Settings saved. Enter the S3 secret key to finish setting up remote storage.';
 		} else {
 			$notes[] = 'Settings saved.';
 		}
 		self::flash( $level, implode( ' ', $notes ) );
-		self::back( 'dtc-settings' );
+		self::back( 'digifix-tc-settings' );
 	}
 
 	public static function handle_report() {
-		self::guard( 'dtc_report' );
-		$month = preg_match( '/^\d{4}-\d{2}$/', $_POST['month'] ?? '' ) ? sanitize_text_field( wp_unslash( $_POST['month'] ) ) : wp_date( 'Y-m' );
+		self::guard();
+		check_admin_referer( 'digifix_tc_report' );
+		$month = sanitize_text_field( wp_unslash( $_POST['month'] ?? '' ) );
+		$month = preg_match( '/^\d{4}-\d{2}$/', $month ) ? $month : wp_date( 'Y-m' );
 		$tz    = wp_timezone();
 		$start = new DateTimeImmutable( $month . '-01 00:00:00', $tz );
 		$end   = $start->modify( 'first day of next month' );
-		$rep   = DTC_Report_Builder::build( $start, $end );
+		$rep   = Digifix_TC_Report_Builder::build( $start, $end );
 		$mode  = sanitize_key( $_POST['mode'] ?? 'html' );
 
 		if ( 'email' === $mode ) {
-			DTC_Notifier::notify( 'report.monthly', array( 'report' => $rep ) );
+			Digifix_TC_Notifier::notify( 'report.monthly', array( 'report' => $rep ) );
 			self::flash( 'success', 'Report for ' . $rep['period']['label'] . ' emailed.' );
-			self::back( 'dtc-reports' );
+			self::back( 'digifix-tc-reports' );
 		}
 		if ( 'pdf' === $mode ) {
-			$file = DTC_PDF::generate( $rep );
+			$file = Digifix_TC_PDF::generate( $rep );
 			if ( $file ) {
 				nocache_headers();
 				header( 'Content-Type: application/pdf' );
@@ -330,7 +344,7 @@ class DTC_Admin {
 		}
 		nocache_headers();
 		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- template escapes its output.
-		echo str_replace( '</body>', '<p class="noprint" style="text-align:center;margin:20px"><button onclick="window.print()">Print / Save as PDF</button></p></body>', DTC_PDF::render_html( $rep ) );
+		echo str_replace( '</body>', '<p class="noprint" style="text-align:center;margin:20px"><button onclick="window.print()">Print / Save as PDF</button></p></body>', Digifix_TC_PDF::render_html( $rep ) );
 		exit;
 	}
 
@@ -339,7 +353,7 @@ class DTC_Admin {
 	 * ------------------------------------------------------------------ */
 
 	private static function form( $action, $label, array $fields = array(), $class = 'button', $confirm = '' ) {
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="dtc-inline"' . ( $confirm ? ' onsubmit="return confirm(' . esc_attr( wp_json_encode( $confirm ) ) . ');"' : '' ) . '>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="digifix-tc-inline"' . ( $confirm ? ' onsubmit="return confirm(' . esc_attr( wp_json_encode( $confirm ) ) . ');"' : '' ) . '>';
 		echo '<input type="hidden" name="action" value="' . esc_attr( $action ) . '">';
 		wp_nonce_field( $action );
 		foreach ( $fields as $name => $value ) {
@@ -358,26 +372,26 @@ class DTC_Admin {
 	}
 
 	private static function badge( $level, $text ) {
-		return '<span class="dtc-badge dtc-' . esc_attr( $level ) . '">' . esc_html( $text ) . '</span>';
+		return '<span class="digifix-tc-badge digifix-tc-' . esc_attr( $level ) . '">' . esc_html( $text ) . '</span>';
 	}
 
 	public static function page_dashboard() {
-		include DTC_DIR . 'admin/views/dashboard.php';
+		include DIGIFIX_TC_DIR . 'admin/views/dashboard.php';
 	}
 
 	public static function page_backups() {
-		include DTC_DIR . 'admin/views/backups.php';
+		include DIGIFIX_TC_DIR . 'admin/views/backups.php';
 	}
 
 	public static function page_log() {
-		include DTC_DIR . 'admin/views/log.php';
+		include DIGIFIX_TC_DIR . 'admin/views/log.php';
 	}
 
 	public static function page_reports() {
-		include DTC_DIR . 'admin/views/reports.php';
+		include DIGIFIX_TC_DIR . 'admin/views/reports.php';
 	}
 
 	public static function page_settings() {
-		include DTC_DIR . 'admin/views/settings.php';
+		include DIGIFIX_TC_DIR . 'admin/views/settings.php';
 	}
 }

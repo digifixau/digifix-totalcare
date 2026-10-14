@@ -18,12 +18,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use Aws\S3\S3Client;
 
-class DTC_WPvivid_R2 extends Wpvivid_S3Compat {
+class Digifix_TC_WPvivid_R2 extends Wpvivid_S3Compat {
 
-	const TYPE = 'dtc_r2';
+	const TYPE = 'digifix_tc_r2';
 
 	/** @var array Copy of the options; the parent keeps its own private copy. */
-	private $dtc_options = array();
+	private $digifix_tc_options = array();
 
 	public function __construct( $options = array() ) {
 		// WPvivid instantiates every registered type without options to let it
@@ -31,7 +31,7 @@ class DTC_WPvivid_R2 extends Wpvivid_S3Compat {
 		if ( empty( $options ) ) {
 			return;
 		}
-		$this->dtc_options = $options;
+		$this->digifix_tc_options = $options;
 		parent::__construct( $options );
 	}
 
@@ -42,7 +42,7 @@ class DTC_WPvivid_R2 extends Wpvivid_S3Compat {
 			return $parent;
 		}
 
-		$o      = $this->dtc_options;
+		$o      = $this->digifix_tc_options;
 		$secret = ! empty( $o['is_encrypt'] ) ? base64_decode( $o['secret'] ) : $o['secret']; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
 
 		return S3Client::factory(

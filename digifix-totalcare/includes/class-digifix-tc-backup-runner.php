@@ -11,11 +11,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Backup_Runner {
+class Digifix_TC_Backup_Runner {
 
 	const KEY = 'bk';
 
-	public static function start( DTC_Job $job, $trigger, $force_full = false ) {
+	public static function start( Digifix_TC_Job $job, $trigger, $force_full = false ) {
 		$job->set(
 			self::KEY,
 			array(
@@ -28,23 +28,23 @@ class DTC_Backup_Runner {
 	}
 
 	private static function settings() {
-		$s = DTC_Settings::all();
+		$s = Digifix_TC_Settings::all();
 		return array(
-			'patterns'   => DTC_Bk_Areas::patterns( '' !== trim( (string) $s['backup_excludes'] ) ? $s['backup_excludes'] : DTC_Bk_Areas::default_excludes() ),
-			'excludes'   => '' !== trim( (string) $s['backup_excludes'] ) ? (string) $s['backup_excludes'] : DTC_Bk_Areas::default_excludes(),
+			'patterns'   => Digifix_TC_Bk_Areas::patterns( '' !== trim( (string) $s['backup_excludes'] ) ? $s['backup_excludes'] : Digifix_TC_Bk_Areas::default_excludes() ),
+			'excludes'   => '' !== trim( (string) $s['backup_excludes'] ) ? (string) $s['backup_excludes'] : Digifix_TC_Bk_Areas::default_excludes(),
 			'tables'     => array_values( array_filter( array_map( 'trim', preg_split( '/[\s,]+/', (string) $s['backup_db_tables'] ) ) ) ),
 			'scope'      => $s['backup_db_scope'],
 			'full_days'  => max( 1, (int) $s['backup_full_days'] ),
-			'retention'  => array_intersect_key( $s, DTC_Bk_Retention::defaults() ),
+			'retention'  => array_intersect_key( $s, Digifix_TC_Bk_Retention::defaults() ),
 		);
 	}
 
 	private static function last_meta_file() {
-		return DTC_Bk_Util::work_dir() . '/index-last.json';
+		return Digifix_TC_Bk_Util::work_dir() . '/index-last.json';
 	}
 
 	private static function last_index_file() {
-		return DTC_Bk_Util::work_dir() . '/index-last.tsv';
+		return Digifix_TC_Bk_Util::work_dir() . '/index-last.tsv';
 	}
 
 	/**
@@ -52,8 +52,8 @@ class DTC_Backup_Runner {
 	 *
 	 * @return string|WP_Error 'continue' or 'done'.
 	 */
-	public static function step( DTC_Job $job, $deadline = null ) {
-		$deadline = $deadline ? $deadline : DTC_Jobs::deadline();
+	public static function step( Digifix_TC_Job $job, $deadline = null ) {
+		$deadline = $deadline ? $deadline : Digifix_TC_Jobs::deadline();
 		$bk       = (array) $job->get( self::KEY );
 		try {
 			while ( microtime( true ) < $deadline ) {
@@ -66,17 +66,17 @@ class DTC_Backup_Runner {
 					return $bk;
 				}
 			}
-		} catch ( DTC_Bk_Exception $e ) {
-			return new WP_Error( 'dtc_backup', $e->getMessage() );
+		} catch ( Digifix_TC_Bk_Exception $e ) {
+			return new WP_Error( 'digifix_tc_backup', wp_specialchars_decode( $e->getMessage(), ENT_QUOTES ) );
 		}
 		return 'done' === ( $bk['phase'] ?? '' ) ? 'done' : 'continue';
 	}
 
 	/** Persist, then run post-commit cleanup (uploaded spool segments). */
-	private static function commit( DTC_Job $job, array $bk, $after = null ) {
+	private static function commit( Digifix_TC_Job $job, array $bk, $after = null ) {
 		$job->set( self::KEY, $bk );
 		if ( ! $job->save() ) {
-			throw new DTC_Bk_Exception( 'The job was cancelled.' );
+			throw new Digifix_TC_Bk_Exception( 'The job was cancelled.' );
 		}
 		if ( $after ) {
 			call_user_func( $after );
@@ -85,9 +85,9 @@ class DTC_Backup_Runner {
 	}
 
 	private static function remote( array $bk ) {
-		$remote = DTC_Bk_Remote::from_settings( $bk['folder'] ?? null );
+		$remote = Digifix_TC_Bk_Remote::from_settings( $bk['folder'] ?? null );
 		if ( is_wp_error( $remote ) ) {
-			throw new DTC_Bk_Exception( $remote->get_error_message() );
+			throw new Digifix_TC_Bk_Exception( esc_html( $remote->get_error_message() ) );
 		}
 		return $remote;
 	}
@@ -96,17 +96,17 @@ class DTC_Backup_Runner {
 	 * Phases
 	 * ------------------------------------------------------------------ */
 
-	private static function phase_preflight( DTC_Job $job, array $bk ) {
+	private static function phase_preflight( Digifix_TC_Job $job, array $bk ) {
 		$remote = self::remote( array() );
 		$owner  = $remote->check_owner();
 		if ( is_wp_error( $owner ) ) {
 			return $owner;
 		}
-		DTC_Bk_Db_Dump::connection();
+		Digifix_TC_Bk_Db_Dump::connection();
 
 		$s    = self::settings();
-		$hash = md5( wp_json_encode( array( $s['patterns'], $s['tables'], $s['scope'], DTC_Bk_Util::FORMAT, DTC_Bk_Areas::roots() ) ) );
-		$meta = DTC_Bk_Util::read_json( self::last_meta_file() );
+		$hash = md5( wp_json_encode( array( $s['patterns'], $s['tables'], $s['scope'], Digifix_TC_Bk_Util::FORMAT, Digifix_TC_Bk_Areas::roots() ) ) );
+		$meta = Digifix_TC_Bk_Util::read_json( self::last_meta_file() );
 
 		$full   = ! empty( $bk['force_full'] ) || $s['full_days'] <= 1;
 		$reason = $full ? 'full backup requested' : '';
@@ -139,18 +139,18 @@ class DTC_Backup_Runner {
 
 		// Jobs never overlap, so any other backup work folder is left over
 		// from a run that died or was abandoned.
-		foreach ( (array) glob( DTC_Bk_Util::work_dir() . '/*', GLOB_ONLYDIR ) as $old ) {
-			if ( DTC_Bk_Remote::parse_id( basename( $old ) ) ) {
-				DTC_Bk_Util::rrmdir( $old );
+		foreach ( (array) glob( Digifix_TC_Bk_Util::work_dir() . '/*', GLOB_ONLYDIR ) as $old ) {
+			if ( Digifix_TC_Bk_Remote::parse_id( basename( $old ) ) ) {
+				Digifix_TC_Bk_Util::rrmdir( $old );
 			}
 		}
 
-		$id  = DTC_Bk_Remote::new_id( $full, $bk['trigger'] );
-		$dir = DTC_Bk_Util::run_dir( $id );
+		$id  = Digifix_TC_Bk_Remote::new_id( $full, $bk['trigger'] );
+		$dir = Digifix_TC_Bk_Util::run_dir( $id );
 		$free = function_exists( 'disk_free_space' ) ? @disk_free_space( $dir ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( false !== $free && $free < 64 * MB_IN_BYTES ) {
-			DTC_Bk_Util::rrmdir( $dir );
-			return new WP_Error( 'dtc_backup', 'Less than 64 MB of free disk space for the backup work files.' );
+			Digifix_TC_Bk_Util::rrmdir( $dir );
+			return new WP_Error( 'digifix_tc_backup', 'Less than 64 MB of free disk space for the backup work files.' );
 		}
 
 		return self::commit(
@@ -182,10 +182,10 @@ class DTC_Backup_Runner {
 		);
 	}
 
-	private static function phase_db( DTC_Job $job, array $bk, $deadline ) {
+	private static function phase_db( Digifix_TC_Job $job, array $bk, $deadline ) {
 		$remote = self::remote( $bk );
-		$writer = new DTC_Bk_Gz_Writer( $remote->s3, $bk['dir'], 'db', $remote->backup_key( $bk['id'], 'db.sql.gz' ), $bk['dbw'] );
-		$dump   = new DTC_Bk_Db_Dump( $writer, $bk['db'] ? $bk['db'] : DTC_Bk_Db_Dump::init_state( $bk['scope'], $bk['tables'] ) );
+		$writer = new Digifix_TC_Bk_Gz_Writer( $remote->s3, $bk['dir'], 'db', $remote->backup_key( $bk['id'], 'db.sql.gz' ), $bk['dbw'] );
+		$dump   = new Digifix_TC_Bk_Db_Dump( $writer, $bk['db'] ? $bk['db'] : Digifix_TC_Bk_Db_Dump::init_state( $bk['scope'], $bk['tables'] ) );
 		$done   = $dump->run( $deadline );
 		$writer->end_member();
 		$bk['db'] = $dump->state();
@@ -199,10 +199,10 @@ class DTC_Backup_Runner {
 		return self::commit( $job, $bk, array( $writer, 'after_commit' ) );
 	}
 
-	private static function phase_files( DTC_Job $job, array $bk, $deadline ) {
+	private static function phase_files( Digifix_TC_Job $job, array $bk, $deadline ) {
 		$remote = self::remote( $bk );
 		$prev   = $bk['full'] ? '' : self::last_index_file();
-		$fb     = new DTC_Bk_File_Backup( $remote, $bk['id'], $bk['dir'], $bk['files'] ? $bk['files'] : DTC_Bk_File_Backup::init_state(), $prev, DTC_Bk_Areas::patterns( $bk['excludes'] ) );
+		$fb     = new Digifix_TC_Bk_File_Backup( $remote, $bk['id'], $bk['dir'], $bk['files'] ? $bk['files'] : Digifix_TC_Bk_File_Backup::init_state(), $prev, Digifix_TC_Bk_Areas::patterns( $bk['excludes'] ) );
 		$done   = $fb->run( $deadline );
 		$bk['files'] = $fb->state();
 		if ( $done ) {
@@ -215,19 +215,19 @@ class DTC_Backup_Runner {
 		return self::commit( $job, $bk, array( $fb, 'after_commit' ) );
 	}
 
-	private static function phase_finalize( DTC_Job $job, array $bk, $deadline ) {
+	private static function phase_finalize( Digifix_TC_Job $job, array $bk, $deadline ) {
 		global $wpdb, $wp_version;
 		$remote = self::remote( $bk );
 		$dir    = $bk['dir'];
 
 		// 1. The file index (can be large: streamed like the archives).
 		if ( empty( $bk['objects']['index.tsv.gz'] ) ) {
-			$writer = new DTC_Bk_Gz_Writer( $remote->s3, $dir, 'index', $remote->backup_key( $bk['id'], 'index.tsv.gz' ), $bk['idxw'] ?? null );
+			$writer = new Digifix_TC_Bk_Gz_Writer( $remote->s3, $dir, 'index', $remote->backup_key( $bk['id'], 'index.tsv.gz' ), $bk['idxw'] ?? null );
 			$src    = fopen( $dir . '/index.tsv', 'rb' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 			fseek( $src, (int) ( $bk['idx_off'] ?? 0 ) );
 			$writer->begin_member( 6 );
 			while ( ! feof( $src ) && microtime( true ) < $deadline ) {
-				$writer->write( (string) fread( $src, 1048576 ) );
+				$writer->write( (string) fread( $src, 1048576 ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
 				if ( $writer->member_full() ) {
 					$writer->end_member();
 					$writer->begin_member( 6 );
@@ -253,7 +253,7 @@ class DTC_Backup_Runner {
 			$local = $dir . '/' . ( 'db.sql.gz' === $name ? 'db' : $info['area'] ) . '.members.tsv';
 			$fh    = fopen( $local, 'rb' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 			if ( ! $fh ) {
-				throw new DTC_Bk_Exception( 'Member index ' . $local . ' is missing.' );
+				throw new Digifix_TC_Bk_Exception( esc_html( 'Member index ' . $local . ' is missing.' ) );
 			}
 			while ( false !== ( $line = fgets( $fh ) ) ) { // phpcs:ignore WordPress.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition
 				// Rows are already TSV-escaped; prefix the object name.
@@ -264,7 +264,7 @@ class DTC_Backup_Runner {
 		$gz  = gzencode( $rows, 6 );
 		$res = $remote->s3->put( $remote->backup_key( $bk['id'], 'members.tsv.gz' ), $gz, 'application/gzip' );
 		if ( is_wp_error( $res ) ) {
-			throw new DTC_Bk_Exception( $res->get_error_message() );
+			throw new Digifix_TC_Bk_Exception( esc_html( $res->get_error_message() ) );
 		}
 		$bk['objects']['members.tsv.gz'] = array(
 			'size'    => strlen( $gz ),
@@ -282,9 +282,9 @@ class DTC_Backup_Runner {
 		foreach ( $bk['objects'] as $o ) {
 			$size += (int) $o['size'];
 		}
-		$dbh      = DTC_Bk_Db_Dump::connection();
+		$dbh      = Digifix_TC_Bk_Db_Dump::connection();
 		$manifest = array(
-			'format'     => DTC_Bk_Util::FORMAT,
+			'format'     => Digifix_TC_Bk_Util::FORMAT,
 			'id'         => $bk['id'],
 			'type'       => $bk['full'] ? 'full' : 'incremental',
 			'trigger'    => $bk['trigger'],
@@ -296,19 +296,19 @@ class DTC_Backup_Runner {
 			'site'       => array(
 				'home'        => get_option( 'home' ),
 				'siteurl'     => get_option( 'siteurl' ),
-				'site_key'    => DTC_Bk_Util::site_key(),
-				'uuid'        => DTC_Bk_Remote::site_uuid(),
+				'site_key'    => Digifix_TC_Bk_Util::site_key(),
+				'uuid'        => Digifix_TC_Bk_Remote::site_uuid(),
 				'name'        => get_bloginfo( 'name' ),
 				'abspath'     => ABSPATH,
 				'content_dir' => WP_CONTENT_DIR,
-				'roots'       => DTC_Bk_Areas::roots(),
+				'roots'       => Digifix_TC_Bk_Areas::roots(),
 				'prefix'      => $wpdb->prefix,
 				'charset'     => $bk['db']['charset'],
 				'collate'     => $wpdb->collate,
 				'wp'          => $wp_version,
 				'php'         => PHP_VERSION,
 				'mysql'       => $dbh->server_info,
-				'plugin'      => DTC_VERSION,
+				'plugin'      => DIGIFIX_TC_VERSION,
 			),
 			'excludes'   => $bk['excludes'],
 			'db_tables_excluded' => $bk['tables'],
@@ -329,9 +329,9 @@ class DTC_Backup_Runner {
 		);
 		$res = $remote->put_manifest( $manifest );
 		if ( is_wp_error( $res ) ) {
-			throw new DTC_Bk_Exception( $res->get_error_message() );
+			throw new Digifix_TC_Bk_Exception( esc_html( $res->get_error_message() ) );
 		}
-		$remote->catalog_put( DTC_Bk_Remote::catalog_entry( $manifest ) );
+		$remote->catalog_put( Digifix_TC_Bk_Remote::catalog_entry( $manifest ) );
 
 		$bk['summary'] = self::summary( $bk, $manifest );
 		$bk['phase']   = 'local';
@@ -342,11 +342,11 @@ class DTC_Backup_Runner {
 	}
 
 	/** Keep this backup's index locally for the next incremental. Idempotent. */
-	private static function phase_local( DTC_Job $job, array $bk ) {
+	private static function phase_local( Digifix_TC_Job $job, array $bk ) {
 		if ( file_exists( $bk['dir'] . '/index.tsv' ) ) {
-			rename( $bk['dir'] . '/index.tsv', self::last_index_file() );
+			rename( $bk['dir'] . '/index.tsv', self::last_index_file() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
 		}
-		DTC_Bk_Util::write_json(
+		Digifix_TC_Bk_Util::write_json(
 			self::last_meta_file(),
 			array(
 				'id'        => $bk['id'],
@@ -357,14 +357,14 @@ class DTC_Backup_Runner {
 				'created'   => time(),
 			)
 		);
-		DTC_Bk_Util::rrmdir( $bk['dir'] );
+		Digifix_TC_Bk_Util::rrmdir( $bk['dir'] );
 		$bk['phase'] = 'retention';
 		return self::commit( $job, $bk );
 	}
 
-	private static function phase_retention( DTC_Job $job, array $bk ) {
+	private static function phase_retention( Digifix_TC_Job $job, array $bk ) {
 		$remote = self::remote( $bk );
-		$res    = DTC_Bk_Retention::run( $remote, self::settings()['retention'] );
+		$res    = Digifix_TC_Bk_Retention::run( $remote, self::settings()['retention'] );
 		if ( is_wp_error( $res ) ) {
 			$bk['summary']['retention'] = 'Old backups were not pruned: ' . $res->get_error_message();
 		} else {
@@ -384,7 +384,7 @@ class DTC_Backup_Runner {
 
 	/** Same shape the WPvivid integration produced, plus engine details. */
 	public static function summary( array $bk, array $manifest ) {
-		$s = DTC_Settings::all();
+		$s = Digifix_TC_Settings::all();
 		return array(
 			'backup_id'     => $bk['id'],
 			'created'       => (int) $bk['started'],
@@ -404,20 +404,20 @@ class DTC_Backup_Runner {
 	}
 
 	/** Abort uploads and remove partial objects after a failure or cancel. */
-	public static function cleanup( DTC_Job $job ) {
+	public static function cleanup( Digifix_TC_Job $job ) {
 		$bk = (array) $job->get( self::KEY );
 		if ( empty( $bk['id'] ) || in_array( $bk['phase'] ?? '', array( 'local', 'retention', 'done' ), true ) ) {
 			return;
 		}
-		$remote = DTC_Bk_Remote::from_settings( $bk['folder'] ?? null );
+		$remote = Digifix_TC_Bk_Remote::from_settings( $bk['folder'] ?? null );
 		if ( ! is_wp_error( $remote ) ) {
 			foreach ( array( $bk['dbw'] ?? null, $bk['idxw'] ?? null ) as $ws ) {
 				if ( $ws ) {
-					DTC_Bk_Gz_Writer::abort_state( $remote->s3, $ws );
+					Digifix_TC_Bk_Gz_Writer::abort_state( $remote->s3, $ws );
 				}
 			}
 			if ( ! empty( $bk['files'] ) ) {
-				DTC_Bk_File_Backup::abort( $remote->s3, $bk['files'] );
+				Digifix_TC_Bk_File_Backup::abort( $remote->s3, $bk['files'] );
 			}
 			$list = $remote->s3->list_all( $remote->key( 'backups/' . $bk['id'] . '/' ) );
 			if ( is_array( $list ) && $list['objects'] ) {
@@ -425,7 +425,7 @@ class DTC_Backup_Runner {
 			}
 		}
 		if ( ! empty( $bk['dir'] ) ) {
-			DTC_Bk_Util::rrmdir( $bk['dir'] );
+			Digifix_TC_Bk_Util::rrmdir( $bk['dir'] );
 		}
 	}
 }

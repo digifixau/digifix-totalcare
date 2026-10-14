@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Db_Import {
+class Digifix_TC_Bk_Db_Import {
 
 	const OLD_FILE = 'restore-old-tables.json';
 
@@ -54,7 +54,7 @@ class DTC_Bk_Db_Import {
 	}
 
 	public function __construct( array $state ) {
-		$this->db = DTC_Bk_Db_Dump::connection();
+		$this->db = Digifix_TC_Bk_Db_Dump::connection();
 		$this->st = $state;
 	}
 
@@ -65,7 +65,7 @@ class DTC_Bk_Db_Import {
 	private function query( $sql ) {
 		$res = $this->db->query( $sql );
 		if ( false === $res ) {
-			throw new DTC_Bk_Exception( 'Database error during restore: ' . $this->db->error . ' [' . substr( $sql, 0, 160 ) . ']' );
+			throw new Digifix_TC_Bk_Exception( esc_html( 'Database error during restore: ' . $this->db->error . ' [' . substr( $sql, 0, 160 ) . ']' ) );
 		}
 		if ( $res instanceof mysqli_result ) {
 			$res->free();
@@ -75,7 +75,7 @@ class DTC_Bk_Db_Import {
 
 	/** Server checks before anything is changed. @return string[] problems */
 	public static function preflight( $max_stmt ) {
-		$db       = DTC_Bk_Db_Dump::connection();
+		$db       = Digifix_TC_Bk_Db_Dump::connection();
 		$problems = array();
 		$res      = $db->query( 'SELECT @@max_allowed_packet' );
 		$packet   = $res ? (int) $res->fetch_row()[0] : 0;
@@ -94,7 +94,7 @@ class DTC_Bk_Db_Import {
 
 	/** Collation/charset rewrites needed on this server. */
 	public static function server_fixes() {
-		$db  = DTC_Bk_Db_Dump::connection();
+		$db  = Digifix_TC_Bk_Db_Dump::connection();
 		$has = function ( $sql ) use ( $db ) {
 			$res = $db->query( $sql );
 			$ok  = $res && $res->num_rows > 0;
@@ -115,7 +115,7 @@ class DTC_Bk_Db_Import {
 
 	/** Drop temp tables left by an earlier failed restore. */
 	public static function drop_temp() {
-		$db  = DTC_Bk_Db_Dump::connection();
+		$db  = Digifix_TC_Bk_Db_Dump::connection();
 		$res = $db->query( "SHOW TABLES LIKE 'dtcr\\_%'" );
 		$all = array();
 		if ( $res ) {
@@ -126,7 +126,7 @@ class DTC_Bk_Db_Import {
 		}
 		$db->query( 'SET FOREIGN_KEY_CHECKS=0' );
 		foreach ( $all as $t ) {
-			$db->query( 'DROP TABLE IF EXISTS ' . DTC_Bk_Db_Dump::q( $t ) );
+			$db->query( 'DROP TABLE IF EXISTS ' . Digifix_TC_Bk_Db_Dump::q( $t ) );
 		}
 	}
 
@@ -173,7 +173,7 @@ class DTC_Bk_Db_Import {
 			$this->insert( $line );
 			return true;
 		}
-		throw new DTC_Bk_Exception( 'Unexpected statement in the database backup: ' . substr( $line, 0, 80 ) );
+		throw new Digifix_TC_Bk_Exception( esc_html( 'Unexpected statement in the database backup: ' . substr( $line, 0, 80 ) ) );
 	}
 
 	private static function name_after( $line, $offset ) {
@@ -182,7 +182,7 @@ class DTC_Bk_Db_Import {
 			$end = strpos( $line, '` ', $end + 1 );
 		}
 		if ( false === $end ) {
-			throw new DTC_Bk_Exception( 'Malformed statement in the database backup.' );
+			throw new Digifix_TC_Bk_Exception( 'Malformed statement in the database backup.' );
 		}
 		return array( str_replace( '``', '`', substr( $line, $offset, $end - $offset ) ), $end + 1 );
 	}
@@ -193,7 +193,7 @@ class DTC_Bk_Db_Import {
 		$temp                 = self::temp_name( $final );
 		$this->st['tables'][] = $final;
 
-		$sql = 'CREATE TABLE ' . DTC_Bk_Db_Dump::q( $temp ) . substr( $line, $end );
+		$sql = 'CREATE TABLE ' . Digifix_TC_Bk_Db_Dump::q( $temp ) . substr( $line, $end );
 		$sql = rtrim( $sql, ';' );
 
 		// Foreign key names are unique per database and the live table still
@@ -202,14 +202,14 @@ class DTC_Bk_Db_Import {
 		$sql = preg_replace_callback(
 			'/CONSTRAINT `((?:[^`]|``)+)` FOREIGN KEY/',
 			function ( $m ) {
-				return 'CONSTRAINT ' . DTC_Bk_Db_Dump::q( $this->free_constraint_name( str_replace( '``', '`', $m[1] ) ) ) . ' FOREIGN KEY';
+				return 'CONSTRAINT ' . Digifix_TC_Bk_Db_Dump::q( $this->free_constraint_name( str_replace( '``', '`', $m[1] ) ) ) . ' FOREIGN KEY';
 			},
 			$sql
 		);
 		$sql = preg_replace_callback(
 			'/REFERENCES `((?:[^`]|``)+)`/',
 			function ( $m ) {
-				return 'REFERENCES ' . DTC_Bk_Db_Dump::q( self::temp_name( $this->final_name( str_replace( '``', '`', $m[1] ) ) ) );
+				return 'REFERENCES ' . Digifix_TC_Bk_Db_Dump::q( self::temp_name( $this->final_name( str_replace( '``', '`', $m[1] ) ) ) );
 			},
 			$sql
 		);
@@ -220,7 +220,7 @@ class DTC_Bk_Db_Import {
 			$sql = str_replace( 'utf8mb3', 'utf8', $sql );
 		}
 
-		$this->query( 'DROP TABLE IF EXISTS ' . DTC_Bk_Db_Dump::q( $temp ) );
+		$this->query( 'DROP TABLE IF EXISTS ' . Digifix_TC_Bk_Db_Dump::q( $temp ) );
 		$this->query( $sql );
 	}
 
@@ -237,13 +237,13 @@ class DTC_Bk_Db_Import {
 				return $candidate;
 			}
 		}
-		throw new DTC_Bk_Exception( 'No free name for foreign key ' . $name . '.' );
+		throw new Digifix_TC_Bk_Exception( esc_html( 'No free name for foreign key ' . $name . '.' ) );
 	}
 
 	private function insert( $line ) {
 		list( $source, $end ) = self::name_after( $line, 13 );
 		$temp                 = self::temp_name( $this->final_name( $source ) );
-		$sql                  = 'INSERT INTO ' . DTC_Bk_Db_Dump::q( $temp ) . substr( $line, $end );
+		$sql                  = 'INSERT INTO ' . Digifix_TC_Bk_Db_Dump::q( $temp ) . substr( $line, $end );
 
 		if ( $this->st['map'] ) {
 			$sql = $this->migrate( $sql );
@@ -311,7 +311,7 @@ class DTC_Bk_Db_Import {
 			while ( true ) {
 				$j = strpos( $sql, "'", $j );
 				if ( false === $j ) {
-					throw new DTC_Bk_Exception( 'Unterminated string in the database backup.' );
+					throw new Digifix_TC_Bk_Exception( 'Unterminated string in the database backup.' );
 				}
 				$bs = 0;
 				for ( $k = $j - 1; $k > $q && '\\' === $sql[ $k ]; $k-- ) {
@@ -325,7 +325,7 @@ class DTC_Bk_Db_Import {
 			$raw = substr( $sql, $q + 1, $j - $q - 1 );
 			if ( $col !== $skip ) {
 				$val = strtr( $raw, $un );
-				$new = DTC_Bk_Replace::apply( $val, $map );
+				$new = Digifix_TC_Bk_Replace::apply( $val, $map );
 				if ( $new !== $val ) {
 					$raw = $this->db->real_escape_string( $new );
 				}
@@ -343,8 +343,8 @@ class DTC_Bk_Db_Import {
 		if ( '' === $old || $old === $new ) {
 			return;
 		}
-		$options  = DTC_Bk_Db_Dump::q( self::temp_name( $new . 'options' ) );
-		$usermeta = DTC_Bk_Db_Dump::q( self::temp_name( $new . 'usermeta' ) );
+		$options  = Digifix_TC_Bk_Db_Dump::q( self::temp_name( $new . 'options' ) );
+		$usermeta = Digifix_TC_Bk_Db_Dump::q( self::temp_name( $new . 'usermeta' ) );
 		if ( in_array( $new . 'options', $this->st['tables'], true ) ) {
 			$this->query( 'UPDATE ' . $options . " SET option_name = '" . $this->db->real_escape_string( $new . 'user_roles' ) . "' WHERE option_name = '" . $this->db->real_escape_string( $old . 'user_roles' ) . "'" );
 		}
@@ -361,7 +361,7 @@ class DTC_Bk_Db_Import {
 	private function temp_options() {
 		global $wpdb;
 		$final = $wpdb->prefix . 'options';
-		return in_array( $final, $this->st['tables'], true ) ? DTC_Bk_Db_Dump::q( self::temp_name( $final ) ) : null;
+		return in_array( $final, $this->st['tables'], true ) ? Digifix_TC_Bk_Db_Dump::q( self::temp_name( $final ) ) : null;
 	}
 
 	public function temp_option( $name ) {
@@ -392,7 +392,7 @@ class DTC_Bk_Db_Import {
 	/** Current (live) raw option value, bypassing caches. */
 	public function live_option( $name ) {
 		global $wpdb;
-		$res = $this->db->query( 'SELECT option_value FROM ' . DTC_Bk_Db_Dump::q( $wpdb->prefix . 'options' ) . " WHERE option_name = '" . $this->db->real_escape_string( $name ) . "' LIMIT 1" );
+		$res = $this->db->query( 'SELECT option_value FROM ' . Digifix_TC_Bk_Db_Dump::q( $wpdb->prefix . 'options' ) . " WHERE option_name = '" . $this->db->real_escape_string( $name ) . "' LIMIT 1" );
 		$val = null;
 		if ( $res instanceof mysqli_result ) {
 			$row = $res->fetch_row();
@@ -423,18 +423,18 @@ class DTC_Bk_Db_Import {
 			$temp = self::temp_name( $final );
 			if ( self::exists( $this->db, $final ) ) {
 				$o = self::old_name( $final );
-				$this->query( 'DROP TABLE IF EXISTS ' . DTC_Bk_Db_Dump::q( $o ) );
-				$renames[]      = DTC_Bk_Db_Dump::q( $final ) . ' TO ' . DTC_Bk_Db_Dump::q( $o );
+				$this->query( 'DROP TABLE IF EXISTS ' . Digifix_TC_Bk_Db_Dump::q( $o ) );
+				$renames[]      = Digifix_TC_Bk_Db_Dump::q( $final ) . ' TO ' . Digifix_TC_Bk_Db_Dump::q( $o );
 				$old[ $final ] = $o;
 			}
-			$renames[] = DTC_Bk_Db_Dump::q( $temp ) . ' TO ' . DTC_Bk_Db_Dump::q( $final );
+			$renames[] = Digifix_TC_Bk_Db_Dump::q( $temp ) . ' TO ' . Digifix_TC_Bk_Db_Dump::q( $final );
 		}
 		if ( ! $renames ) {
 			return;
 		}
 		// Record the plan first so a crash right after the rename can be undone.
-		DTC_Bk_Util::write_json(
-			DTC_Bk_Util::data_dir() . '/' . self::OLD_FILE,
+		Digifix_TC_Bk_Util::write_json(
+			Digifix_TC_Bk_Util::data_dir() . '/' . self::OLD_FILE,
 			array(
 				'time'   => time(),
 				'tables' => $old,
@@ -448,7 +448,7 @@ class DTC_Bk_Db_Import {
 				break;
 			}
 			if ( $try >= 4 ) {
-				throw new DTC_Bk_Exception( 'Could not swap in the restored tables: ' . $this->db->error );
+				throw new Digifix_TC_Bk_Exception( esc_html( 'Could not swap in the restored tables: ' . $this->db->error ) );
 			}
 			sleep( 2 );
 		}
@@ -458,23 +458,23 @@ class DTC_Bk_Db_Import {
 	/** Whether swap() already ran for these tables (it is atomic). */
 	public static function swapped( array $tables ) {
 		$tables = array_values( array_unique( $tables ) );
-		if ( ! $tables || ! file_exists( DTC_Bk_Util::data_dir() . '/' . self::OLD_FILE ) ) {
+		if ( ! $tables || ! file_exists( Digifix_TC_Bk_Util::data_dir() . '/' . self::OLD_FILE ) ) {
 			return false;
 		}
-		$db = DTC_Bk_Db_Dump::connection();
+		$db = Digifix_TC_Bk_Db_Dump::connection();
 		return ! self::exists( $db, self::temp_name( $tables[0] ) ) && self::exists( $db, $tables[0] );
 	}
 
 	/** Undo a swap (restore failed afterwards) or drop unused temp tables. */
 	public static function rollback() {
-		$db   = DTC_Bk_Db_Dump::connection();
-		$file = DTC_Bk_Util::data_dir() . '/' . self::OLD_FILE;
-		$info = DTC_Bk_Util::read_json( $file );
+		$db   = Digifix_TC_Bk_Db_Dump::connection();
+		$file = Digifix_TC_Bk_Util::data_dir() . '/' . self::OLD_FILE;
+		$info = Digifix_TC_Bk_Util::read_json( $file );
 		$db->query( 'SET FOREIGN_KEY_CHECKS=0' );
 		// The rename is atomic: it happened if the first temp table is gone.
 		$swapped = $info && ! empty( $info['new'] ) && ! self::exists( $db, self::temp_name( $info['new'][0] ) ) && self::exists( $db, $info['new'][0] );
 		if ( $info && ! $swapped ) {
-			@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $file );
 		}
 		if ( $swapped ) {
 			$renames = array();
@@ -482,33 +482,33 @@ class DTC_Bk_Db_Import {
 				$old  = $info['tables'][ $final ] ?? null;
 				$temp = self::temp_name( $final );
 				if ( $old ) {
-					$renames[] = DTC_Bk_Db_Dump::q( $final ) . ' TO ' . DTC_Bk_Db_Dump::q( $temp ) . ', ' . DTC_Bk_Db_Dump::q( $old ) . ' TO ' . DTC_Bk_Db_Dump::q( $final );
+					$renames[] = Digifix_TC_Bk_Db_Dump::q( $final ) . ' TO ' . Digifix_TC_Bk_Db_Dump::q( $temp ) . ', ' . Digifix_TC_Bk_Db_Dump::q( $old ) . ' TO ' . Digifix_TC_Bk_Db_Dump::q( $final );
 				} else {
-					$renames[] = DTC_Bk_Db_Dump::q( $final ) . ' TO ' . DTC_Bk_Db_Dump::q( $temp );
+					$renames[] = Digifix_TC_Bk_Db_Dump::q( $final ) . ' TO ' . Digifix_TC_Bk_Db_Dump::q( $temp );
 				}
 			}
 			$res = $db->query( 'RENAME TABLE ' . implode( ', ', $renames ) );
 			if ( false === $res ) {
-				throw new DTC_Bk_Exception( 'Could not roll back the database swap: ' . $db->error );
+				throw new Digifix_TC_Bk_Exception( esc_html( 'Could not roll back the database swap: ' . $db->error ) );
 			}
-			@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $file );
 		}
 		self::drop_temp();
 	}
 
 	/** Drop the replaced tables (after the restored site was checked). */
 	public static function drop_old( $min_age = 0 ) {
-		$file = DTC_Bk_Util::data_dir() . '/' . self::OLD_FILE;
-		$info = DTC_Bk_Util::read_json( $file );
+		$file = Digifix_TC_Bk_Util::data_dir() . '/' . self::OLD_FILE;
+		$info = Digifix_TC_Bk_Util::read_json( $file );
 		if ( ! $info || time() - (int) $info['time'] < $min_age ) {
 			return false;
 		}
-		$db = DTC_Bk_Db_Dump::connection();
+		$db = Digifix_TC_Bk_Db_Dump::connection();
 		$db->query( 'SET FOREIGN_KEY_CHECKS=0' );
 		foreach ( (array) $info['tables'] as $old ) {
-			$db->query( 'DROP TABLE IF EXISTS ' . DTC_Bk_Db_Dump::q( $old ) );
+			$db->query( 'DROP TABLE IF EXISTS ' . Digifix_TC_Bk_Db_Dump::q( $old ) );
 		}
-		@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		wp_delete_file( $file );
 		return true;
 	}
 }

@@ -7,22 +7,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Scheduler {
+class Digifix_TC_Scheduler {
 
-	const HOOK_TICK    = 'dtc_tick';
-	const HOOK_BACKUP  = 'dtc_run_backup';
-	const HOOK_UPDATES = 'dtc_run_updates';
-	const HOOK_SCAN    = 'dtc_run_scan';
-	const HOOK_MONTHLY = 'dtc_monthly_report';
-	const HOOK_DAILY   = 'dtc_daily_maintenance';
+	const HOOK_TICK    = 'digifix_tc_tick';
+	const HOOK_BACKUP  = 'digifix_tc_run_backup';
+	const HOOK_UPDATES = 'digifix_tc_run_updates';
+	const HOOK_SCAN    = 'digifix_tc_run_scan';
+	const HOOK_MONTHLY = 'digifix_tc_monthly_report';
+	const HOOK_DAILY   = 'digifix_tc_daily_maintenance';
 
 	public static function init() {
 		add_filter( 'cron_schedules', array( __CLASS__, 'intervals' ) );
 
-		add_action( self::HOOK_TICK, array( 'DTC_Jobs', 'tick' ) );
-		add_action( self::HOOK_BACKUP, array( 'DTC_Backup_Service', 'schedule_run' ) );
-		add_action( self::HOOK_UPDATES, array( 'DTC_Update_Service', 'schedule_run' ) );
-		add_action( self::HOOK_SCAN, array( 'DTC_Scan_Service', 'schedule_run' ) );
+		add_action( self::HOOK_TICK, array( 'Digifix_TC_Jobs', 'tick' ) );
+		add_action( self::HOOK_BACKUP, array( 'Digifix_TC_Backup_Service', 'schedule_run' ) );
+		add_action( self::HOOK_UPDATES, array( 'Digifix_TC_Update_Service', 'schedule_run' ) );
+		add_action( self::HOOK_SCAN, array( 'Digifix_TC_Scan_Service', 'schedule_run' ) );
 		add_action( self::HOOK_MONTHLY, array( __CLASS__, 'monthly_report' ) );
 		add_action( self::HOOK_DAILY, array( __CLASS__, 'daily_maintenance' ) );
 
@@ -30,7 +30,7 @@ class DTC_Scheduler {
 	}
 
 	public static function intervals( $schedules ) {
-		$schedules['dtc_minute'] = array(
+		$schedules['digifix_tc_minute'] = array(
 			'interval' => MINUTE_IN_SECONDS,
 			'display'  => 'Every minute (TotalCare)',
 		);
@@ -46,19 +46,19 @@ class DTC_Scheduler {
 	/** Make sure the always-on events exist (cheap check on every load). */
 	public static function ensure() {
 		if ( ! wp_next_scheduled( self::HOOK_TICK ) ) {
-			wp_schedule_event( time() + 60, 'dtc_minute', self::HOOK_TICK );
+			wp_schedule_event( time() + 60, 'digifix_tc_minute', self::HOOK_TICK );
 		}
 		if ( ! wp_next_scheduled( self::HOOK_DAILY ) ) {
 			wp_schedule_event( self::next_time( '01:30' ), 'daily', self::HOOK_DAILY );
 		}
-		if ( ! wp_next_scheduled( self::HOOK_MONTHLY ) && DTC_Settings::get( 'monthly_report' ) ) {
+		if ( ! wp_next_scheduled( self::HOOK_MONTHLY ) && Digifix_TC_Settings::get( 'monthly_report' ) ) {
 			wp_schedule_single_event( self::next_month_start(), self::HOOK_MONTHLY );
 		}
 
 		// Self-heal if the cron option lost an enabled schedule (e.g. a
 		// restore of an older database).
 		static $healing = false;
-		$s              = DTC_Settings::all();
+		$s              = Digifix_TC_Settings::all();
 		$missing        = ( $s['backup_enabled'] && ! wp_next_scheduled( self::HOOK_BACKUP ) )
 			|| ( $s['updates_enabled'] && ! wp_next_scheduled( self::HOOK_UPDATES ) )
 			|| ( $s['scan_enabled'] && ! wp_next_scheduled( self::HOOK_SCAN ) );
@@ -70,7 +70,7 @@ class DTC_Scheduler {
 
 	/** Rebuild the configurable schedules from settings. */
 	public static function reschedule() {
-		$s = DTC_Settings::all();
+		$s = Digifix_TC_Settings::all();
 
 		foreach ( array( self::HOOK_BACKUP, self::HOOK_UPDATES, self::HOOK_SCAN, self::HOOK_MONTHLY ) as $hook ) {
 			wp_clear_scheduled_hook( $hook );
@@ -128,19 +128,19 @@ class DTC_Scheduler {
 		$start = ( new DateTimeImmutable( 'first day of last month', $tz ) )->setTime( 0, 0 );
 		$end   = ( new DateTimeImmutable( 'first day of this month', $tz ) )->setTime( 0, 0 );
 
-		$report = DTC_Report_Builder::build( $start, $end );
-		DTC_Notifier::notify( 'report.monthly', array( 'report' => $report ) );
+		$report = Digifix_TC_Report_Builder::build( $start, $end );
+		Digifix_TC_Notifier::notify( 'report.monthly', array( 'report' => $report ) );
 
-		if ( DTC_Settings::get( 'monthly_report' ) ) {
+		if ( Digifix_TC_Settings::get( 'monthly_report' ) ) {
 			wp_schedule_single_event( self::next_month_start(), self::HOOK_MONTHLY );
 		}
 	}
 
 	public static function daily_maintenance() {
-		DTC_Snapshot::cleanup( (int) DTC_Settings::get( 'snapshot_keep_days' ) );
-		DTC_Logger::prune();
-		DTC_Jobs::prune();
-		DTC_Retention_Service::queue();
+		Digifix_TC_Snapshot::cleanup( (int) Digifix_TC_Settings::get( 'snapshot_keep_days' ) );
+		Digifix_TC_Logger::prune();
+		Digifix_TC_Jobs::prune();
+		Digifix_TC_Retention_Service::queue();
 	}
 
 	public static function next_runs() {

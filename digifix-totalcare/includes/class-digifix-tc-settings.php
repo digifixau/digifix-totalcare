@@ -7,9 +7,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Settings {
+class Digifix_TC_Settings {
 
-	const OPTION = 'dtc_settings';
+	const OPTION = 'digifix_tc_settings';
 
 	public static function defaults() {
 		return array(
@@ -21,13 +21,13 @@ class DTC_Settings {
 			'backup_timeout_hours'  => 3,
 			'backup_engine'         => 'totalcare', // totalcare|wpvivid (legacy).
 			'backup_full_days'      => 7,
-			'backup_excludes'       => DTC_Bk_Areas::default_excludes(),
+			'backup_excludes'       => Digifix_TC_Bk_Areas::default_excludes(),
 			'backup_db_tables'      => '',
 			'backup_db_scope'       => 'prefix', // prefix|all.
 			'request_budget'        => 25,
 			'low_impact'            => 0,
 
-			// Retention (see DTC_Bk_Retention).
+			// Retention (see Digifix_TC_Bk_Retention).
 			'retention_min'         => 3,
 			'retention_all_days'    => 3,
 			'retention_daily'       => 14,
@@ -35,7 +35,7 @@ class DTC_Settings {
 			'retention_monthly'     => 12,
 			'retention_update_days' => 14,
 
-			// S3 (the secret is stored encrypted in the dtc_s3_secret option).
+			// S3 (the secret is stored encrypted in the digifix_tc_s3_secret option).
 			's3_type'               => 'amazons3', // amazons3|r2|s3compat.
 			's3_access'             => '',
 			's3_bucket'             => '',
@@ -57,7 +57,6 @@ class DTC_Settings {
 			'health_urls'           => '',
 			'health_strict'         => 0,
 			'snapshot_keep_days'    => 14,
-			'self_update'           => 1,
 
 			// Scans.
 			'scan_enabled'          => 1,
@@ -115,7 +114,7 @@ class DTC_Settings {
 			return in_array( $v, $allowed, true ) ? $v : $fallback;
 		};
 
-		foreach ( array( 'backup_enabled', 'updates_enabled', 'update_plugins', 'update_themes', 'health_strict', 'self_update', 'scan_enabled', 'email_failures', 'email_update_summary', 'email_scan_summary', 'client_gets_summaries', 'monthly_report', 'monthly_attach_pdf', 'low_impact', 's3_path_style' ) as $flag ) {
+		foreach ( array( 'backup_enabled', 'updates_enabled', 'update_plugins', 'update_themes', 'health_strict', 'scan_enabled', 'email_failures', 'email_update_summary', 'email_scan_summary', 'client_gets_summaries', 'monthly_report', 'monthly_attach_pdf', 'low_impact', 's3_path_style' ) as $flag ) {
 			$out[ $flag ] = empty( $input[ $flag ] ) ? 0 : 1;
 		}
 		$int = function ( $key, $min, $max ) use ( $input, $d ) {
@@ -128,7 +127,7 @@ class DTC_Settings {
 		$out['backup_timeout_hours'] = max( 1, min( 12, (int) ( $input['backup_timeout_hours'] ?? 3 ) ) );
 		$out['backup_engine']        = $pick( $input['backup_engine'] ?? '', array( 'totalcare', 'wpvivid' ), $d['backup_engine'] );
 		$out['backup_full_days']     = $int( 'backup_full_days', 1, 60 );
-		$out['backup_excludes']      = implode( "\n", DTC_Bk_Areas::patterns( sanitize_textarea_field( $input['backup_excludes'] ?? '' ) ) );
+		$out['backup_excludes']      = implode( "\n", Digifix_TC_Bk_Areas::patterns( sanitize_textarea_field( $input['backup_excludes'] ?? '' ) ) );
 		$out['backup_db_tables']     = implode( "\n", array_filter( array_map( 'sanitize_text_field', preg_split( '/[\s,]+/', (string) ( $input['backup_db_tables'] ?? '' ) ) ) ) );
 		$out['backup_db_scope']      = $pick( $input['backup_db_scope'] ?? '', array( 'prefix', 'all' ), $d['backup_db_scope'] );
 		$out['request_budget']       = $int( 'request_budget', 10, 120 );
@@ -143,7 +142,7 @@ class DTC_Settings {
 		$out['s3_type']     = $pick( $input['s3_type'] ?? '', array( 'amazons3', 'r2', 's3compat' ), $d['s3_type'] );
 		$out['s3_access']   = sanitize_text_field( $input['s3_access'] ?? '' );
 		$out['s3_bucket']   = sanitize_text_field( $input['s3_bucket'] ?? '' );
-		$out['s3_path']     = DTC_Bk_Util::clean_folder( sanitize_text_field( $input['s3_path'] ?? '' ) );
+		$out['s3_path']     = Digifix_TC_Bk_Util::clean_folder( sanitize_text_field( $input['s3_path'] ?? '' ) );
 		$out['s3_endpoint'] = sanitize_text_field( $input['s3_endpoint'] ?? '' );
 		$out['s3_region']   = preg_replace( '/[^a-z0-9-]/', '', strtolower( (string) ( $input['s3_region'] ?? $out['s3_region'] ) ) );
 

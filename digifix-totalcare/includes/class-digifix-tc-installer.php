@@ -7,44 +7,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Installer {
+class Digifix_TC_Installer {
 
-	const GUARDIAN_FILE = 'dtc-guardian.php';
+	const GUARDIAN_FILE = 'digifix-tc-guardian.php';
 
 	public static function activate() {
 		self::create_tables();
-		DTC_Storage::ensure_dirs();
-		DTC_Storage::secret();
+		Digifix_TC_Storage::ensure_dirs();
+		Digifix_TC_Storage::secret();
 		self::install_guardian();
 		self::litespeed_rule( true );
 		self::import_wpvivid_credentials();
-		DTC_Scheduler::reschedule();
-		DTC_Logger::log( 'system', 'info', 'system.activated', 'Digifix TotalCare activated (v' . DTC_VERSION . ').' );
+		Digifix_TC_Scheduler::reschedule();
+		Digifix_TC_Logger::log( 'system', 'info', 'system.activated', 'Digifix TotalCare activated (v' . DIGIFIX_TC_VERSION . ').' );
 	}
 
 	public static function deactivate() {
-		DTC_Scheduler::clear_all();
+		Digifix_TC_Scheduler::clear_all();
 		// Keep the guardian while a restore is running; it needs to finish it.
-		if ( ! DTC_Restore::in_progress() ) {
+		if ( ! Digifix_TC_Restore::in_progress() ) {
 			self::remove_guardian();
 			self::litespeed_rule( false );
 		}
 	}
 
 	public static function maybe_upgrade() {
-		if ( get_option( 'dtc_db_version' ) !== DTC_DB_VERSION ) {
+		if ( get_option( 'digifix_tc_db_version' ) !== DIGIFIX_TC_DB_VERSION ) {
 			self::create_tables();
 		}
-		$source = DTC_DIR . 'mu-plugin/' . self::GUARDIAN_FILE;
+		$source = DIGIFIX_TC_DIR . 'mu-plugin/' . self::GUARDIAN_FILE;
 		$mode   = self::guardian_mode();
 		$target = 'mu' === $mode ? self::mu_path() : ( 'dropin' === $mode ? self::dropin_guardian_path() : '' );
 		if ( ! $target || ! file_exists( $target ) || md5_file( $target ) !== md5_file( $source ) ) {
 			self::install_guardian();
 		}
-		if ( get_option( 'dtc_installed_version' ) !== DTC_VERSION ) {
+		if ( get_option( 'digifix_tc_installed_version' ) !== DIGIFIX_TC_VERSION ) {
 			self::litespeed_rule( true );
 			self::import_wpvivid_credentials();
-			update_option( 'dtc_installed_version', DTC_VERSION, false );
+			update_option( 'digifix_tc_installed_version', DIGIFIX_TC_VERSION, false );
 		}
 	}
 
@@ -58,7 +58,7 @@ class DTC_Installer {
 	 */
 	public static function litespeed_rule( $add ) {
 		$file = ABSPATH . '.htaccess';
-		if ( ! file_exists( $file ) || ! is_writable( $file ) ) {
+		if ( ! file_exists( $file ) || ! is_writable( $file ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 			return false;
 		}
 		require_once ABSPATH . 'wp-admin/includes/misc.php';
@@ -76,19 +76,19 @@ class DTC_Installer {
 	 * engine works without re-entering credentials.
 	 */
 	public static function import_wpvivid_credentials() {
-		if ( get_option( 'dtc_s3_secret' ) || ! class_exists( 'WPvivid_Setting' ) ) {
+		if ( get_option( 'digifix_tc_s3_secret' ) || ! class_exists( 'WPvivid_Setting' ) ) {
 			return;
 		}
-		$remote = DTC_WPvivid::get_remote();
+		$remote = Digifix_TC_WPvivid::get_remote();
 		if ( ! $remote || empty( $remote['secret'] ) ) {
 			return;
 		}
-		DTC_Storage::secret(); // The encryption key is derived from it.
+		Digifix_TC_Storage::secret(); // The encryption key is derived from it.
 		$secret = ! empty( $remote['is_encrypt'] ) ? base64_decode( $remote['secret'], true ) : $remote['secret']; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
-		$stored = is_string( $secret ) && '' !== $secret ? DTC_Bk_Util::encrypt( $secret ) : '';
+		$stored = is_string( $secret ) && '' !== $secret ? Digifix_TC_Bk_Util::encrypt( $secret ) : '';
 		if ( '' !== $stored ) {
-			update_option( 'dtc_s3_secret', $stored, false );
-			DTC_Logger::log( 'system', 'info', 'system.s3_imported', 'S3 credentials copied from WPvivid; backups now use TotalCare\'s built-in engine.' );
+			update_option( 'digifix_tc_s3_secret', $stored, false );
+			Digifix_TC_Logger::log( 'system', 'info', 'system.s3_imported', 'S3 credentials copied from WPvivid; backups now use TotalCare\'s built-in engine.' );
 		}
 	}
 
@@ -98,7 +98,7 @@ class DTC_Installer {
 		$charset = $wpdb->get_charset_collate();
 
 		dbDelta(
-			"CREATE TABLE {$wpdb->prefix}dtc_jobs (
+			"CREATE TABLE {$wpdb->prefix}digifix_tc_jobs (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				type varchar(32) NOT NULL,
 				status varchar(20) NOT NULL,
@@ -117,7 +117,7 @@ class DTC_Installer {
 		);
 
 		dbDelta(
-			"CREATE TABLE {$wpdb->prefix}dtc_events (
+			"CREATE TABLE {$wpdb->prefix}digifix_tc_events (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				created_at datetime NOT NULL,
 				type varchar(20) NOT NULL,
@@ -133,10 +133,10 @@ class DTC_Installer {
 			) $charset;"
 		);
 
-		update_option( 'dtc_db_version', DTC_DB_VERSION, false );
+		update_option( 'digifix_tc_db_version', DIGIFIX_TC_DB_VERSION, false );
 	}
 
-	const DROPIN_MARKER = 'DTC-GUARDIAN-LOADER';
+	const DROPIN_MARKER = 'DIGIFIX-TC-GUARDIAN-LOADER';
 
 	public static function mu_path() {
 		return untrailingslashit( WPMU_PLUGIN_DIR ) . '/' . self::GUARDIAN_FILE;
@@ -147,7 +147,7 @@ class DTC_Installer {
 	}
 
 	public static function dropin_guardian_path() {
-		return DTC_Storage::data_dir() . '/' . self::GUARDIAN_FILE;
+		return Digifix_TC_Storage::data_dir() . '/' . self::GUARDIAN_FILE;
 	}
 
 	private static function dropin_is_ours() {
@@ -170,11 +170,11 @@ class DTC_Installer {
 	 * request before plugins and mu-plugins.
 	 */
 	public static function install_guardian() {
-		$source = DTC_DIR . 'mu-plugin/' . self::GUARDIAN_FILE;
+		$source = DIGIFIX_TC_DIR . 'mu-plugin/' . self::GUARDIAN_FILE;
 
 		// Plugin basename so the guardian can reactivate TotalCare after a restore.
-		DTC_Storage::ensure_dirs();
-		@file_put_contents( DTC_Storage::data_dir() . '/plugin-basename.txt', DTC_BASENAME ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		Digifix_TC_Storage::ensure_dirs();
+		@file_put_contents( Digifix_TC_Storage::data_dir() . '/plugin-basename.txt', DIGIFIX_TC_BASENAME ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
 		if ( ! file_exists( $source ) ) {
 			return self::guardian_failed( 'The plugin package is incomplete: ' . $source . ' is missing. Re-upload the full plugin zip.' );
@@ -183,7 +183,7 @@ class DTC_Installer {
 		$mu_reason = self::try_mu( $source );
 		if ( '' === $mu_reason ) {
 			if ( self::dropin_is_ours() ) {
-				@unlink( self::dropin_path() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				wp_delete_file( self::dropin_path() );
 			}
 			return self::guardian_ok();
 		}
@@ -201,7 +201,7 @@ class DTC_Installer {
 		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
 			return 'the folder ' . $dir . ' does not exist and could not be created.';
 		}
-		if ( file_exists( $target ) ? ! is_writable( $target ) : ! is_writable( $dir ) ) {
+		if ( file_exists( $target ) ? ! is_writable( $target ) : ! is_writable( $dir ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 			return 'the folder ' . $dir . ' is read-only for PHP' . ( is_link( $dir ) ? ' (it links to ' . readlink( $dir ) . ', a host-managed folder)' : '' ) . '.';
 		}
 		if ( ! @copy( $source, $target ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
@@ -228,8 +228,8 @@ class DTC_Installer {
 			. " * returns null so WordPress keeps its default fatal error handler.\n"
 			. " * Managed by Digifix TotalCare; removed when the plugin is deactivated.\n"
 			. " */\n"
-			. "if ( defined( 'ABSPATH' ) && ! defined( 'DTC_GUARDIAN_VERSION' ) && is_readable( WP_CONTENT_DIR . '/dtc-data/" . self::GUARDIAN_FILE . "' ) ) {\n"
-			. "\tinclude_once WP_CONTENT_DIR . '/dtc-data/" . self::GUARDIAN_FILE . "';\n"
+			. "if ( defined( 'ABSPATH' ) && ! defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) && is_readable( WP_CONTENT_DIR . '/digifix-tc-data/" . self::GUARDIAN_FILE . "' ) ) {\n"
+			. "\tinclude_once WP_CONTENT_DIR . '/digifix-tc-data/" . self::GUARDIAN_FILE . "';\n"
 			. "}\n"
 			. "return null;\n";
 		if ( false === @file_put_contents( $dropin, $loader ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
@@ -239,17 +239,17 @@ class DTC_Installer {
 	}
 
 	private static function guardian_ok() {
-		delete_option( 'dtc_guardian_error' );
-		delete_transient( 'dtc_guardian_error' );
+		delete_option( 'digifix_tc_guardian_error' );
+		delete_transient( 'digifix_tc_guardian_error' );
 		return true;
 	}
 
 	private static function guardian_failed( $reason ) {
-		update_option( 'dtc_guardian_error', $reason, false );
+		update_option( 'digifix_tc_guardian_error', $reason, false );
 		// Log at most once a day; maybe_upgrade() retries on every admin load.
-		if ( ! get_transient( 'dtc_guardian_error' ) ) {
-			set_transient( 'dtc_guardian_error', 1, DAY_IN_SECONDS );
-			DTC_Logger::log( 'system', 'error', 'system.guardian_install_failed', 'Could not install the guardian: ' . $reason . ' Rollback and restore are disabled until it is installed.' );
+		if ( ! get_transient( 'digifix_tc_guardian_error' ) ) {
+			set_transient( 'digifix_tc_guardian_error', 1, DAY_IN_SECONDS );
+			Digifix_TC_Logger::log( 'system', 'error', 'system.guardian_install_failed', 'Could not install the guardian: ' . $reason . ' Rollback and restore are disabled until it is installed.' );
 		}
 		return false;
 	}
@@ -268,19 +268,19 @@ class DTC_Installer {
 	public static function remove_guardian() {
 		foreach ( array( self::mu_path(), self::dropin_guardian_path() ) as $file ) {
 			if ( file_exists( $file ) ) {
-				@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				wp_delete_file( $file );
 			}
 		}
 		if ( self::dropin_is_ours() ) {
-			@unlink( self::dropin_path() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( self::dropin_path() );
 		}
 	}
 
 	public static function guardian_installed() {
-		return defined( 'DTC_GUARDIAN_VERSION' ) && '' !== self::guardian_mode();
+		return defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) && '' !== self::guardian_mode();
 	}
 
 	public static function guardian_error() {
-		return '' !== self::guardian_mode() ? '' : (string) get_option( 'dtc_guardian_error', '' );
+		return '' !== self::guardian_mode() ? '' : (string) get_option( 'digifix_tc_guardian_error', '' );
 	}
 }

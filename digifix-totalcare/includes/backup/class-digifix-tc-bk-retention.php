@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Retention {
+class Digifix_TC_Bk_Retention {
 
 	public static function defaults() {
 		return array(
@@ -134,7 +134,7 @@ class DTC_Bk_Retention {
 	 * @param string $running Backup id currently being written (never touched).
 	 * @return array{deleted:string[],orphans:string[],kept:int}|WP_Error
 	 */
-	public static function run( DTC_Bk_Remote $remote, array $policy, $running = '' ) {
+	public static function run( Digifix_TC_Bk_Remote $remote, array $policy, $running = '' ) {
 		$scan = $remote->scan();
 		if ( is_wp_error( $scan ) ) {
 			return $scan;
@@ -152,7 +152,7 @@ class DTC_Bk_Retention {
 			if ( $id === $running ) {
 				continue;
 			}
-			$parsed = DTC_Bk_Remote::parse_id( $id );
+			$parsed = Digifix_TC_Bk_Remote::parse_id( $id );
 			if ( ! $info['complete'] ) {
 				// Failed or cancelled backups leave folders without a manifest.
 				if ( $parsed && $info['modified'] < time() - 2 * DAY_IN_SECONDS ) {
@@ -166,7 +166,7 @@ class DTC_Bk_Retention {
 				if ( ! is_array( $m ) ) {
 					continue; // Unreadable: leave it alone.
 				}
-				$entry = DTC_Bk_Remote::catalog_entry( $m );
+				$entry = Digifix_TC_Bk_Remote::catalog_entry( $m );
 			}
 			$entry['pinned'] = $info['pinned'];
 			$entries[ $id ]  = $entry;

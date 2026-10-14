@@ -16,11 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Remote {
+class Digifix_TC_Bk_Remote {
 
 	const ID_RE = '/^(\d{8})-(\d{6})-([fi])([smu])-([a-f0-9]{4})$/';
 
-	/** @var DTC_Bk_S3 */
+	/** @var Digifix_TC_Bk_S3 */
 	public $s3;
 
 	/** @var string Folder inside the bucket, no trailing slash. */
@@ -28,27 +28,27 @@ class DTC_Bk_Remote {
 
 	private $manifests = array();
 
-	public function __construct( DTC_Bk_S3 $s3, $folder ) {
+	public function __construct( Digifix_TC_Bk_S3 $s3, $folder ) {
 		$this->s3     = $s3;
-		$this->folder = DTC_Bk_Util::clean_folder( $folder );
+		$this->folder = Digifix_TC_Bk_Util::clean_folder( $folder );
 	}
 
 	/**
 	 * Client for the configured bucket.
 	 *
 	 * @param string|null $folder Another site's folder (cross-site restore).
-	 * @return DTC_Bk_Remote|WP_Error
+	 * @return Digifix_TC_Bk_Remote|WP_Error
 	 */
 	public static function from_settings( $folder = null ) {
-		$s      = DTC_Bk_Util::settings();
-		$secret = DTC_Bk_Util::s3_secret();
+		$s      = Digifix_TC_Bk_Util::settings();
+		$secret = Digifix_TC_Bk_Util::s3_secret();
 		if ( ! $s['s3_access'] || ! $s['s3_bucket'] ) {
-			return new WP_Error( 'dtc_remote', 'Remote storage is not configured (TotalCare → Settings → S3 storage).' );
+			return new WP_Error( 'digifix_tc_remote', 'Remote storage is not configured (TotalCare → Settings → S3 storage).' );
 		}
 		if ( null === $secret || '' === $secret ) {
-			return new WP_Error( 'dtc_remote', 'The S3 secret key is missing or can no longer be decrypted. Enter it again in TotalCare → Settings.' );
+			return new WP_Error( 'digifix_tc_remote', 'The S3 secret key is missing or can no longer be decrypted. Enter it again in TotalCare → Settings.' );
 		}
-		$s3 = new DTC_Bk_S3(
+		$s3 = new Digifix_TC_Bk_S3(
 			array(
 				'type'       => $s['s3_type'],
 				'access'     => $s['s3_access'],
@@ -59,7 +59,7 @@ class DTC_Bk_Remote {
 				'path_style' => $s['s3_path_style'],
 			)
 		);
-		$folder = null !== $folder ? $folder : ( $s['s3_path'] ? $s['s3_path'] : DTC_Bk_Util::default_folder() );
+		$folder = null !== $folder ? $folder : ( $s['s3_path'] ? $s['s3_path'] : Digifix_TC_Bk_Util::default_folder() );
 		return new self( $s3, $folder );
 	}
 
@@ -70,7 +70,7 @@ class DTC_Bk_Remote {
 	 * @return true|WP_Error
 	 */
 	public function test() {
-		$key  = $this->key( '.dtc-test-' . DTC_Bk_Util::random_hex( 4 ) . '.txt' );
+		$key  = $this->key( '.digifix-tc-test-' . Digifix_TC_Bk_Util::random_hex( 4 ) . '.txt' );
 		$body = 'TotalCare connection test ' . gmdate( 'c' );
 		$steps = array(
 			'upload'          => function () use ( $key, $body ) {
@@ -78,7 +78,7 @@ class DTC_Bk_Remote {
 			},
 			'download'        => function () use ( $key, $body ) {
 				$got = $this->s3->get( $key );
-				return is_wp_error( $got ) ? $got : ( $got === $body ? true : new WP_Error( 'dtc_s3', 'the downloaded test file did not match.' ) );
+				return is_wp_error( $got ) ? $got : ( $got === $body ? true : new WP_Error( 'digifix_tc_s3', 'the downloaded test file did not match.' ) );
 			},
 			'list'            => function () {
 				return $this->s3->list_page( $this->key( '' ), '', '', 5 );
@@ -97,7 +97,7 @@ class DTC_Bk_Remote {
 				if ( 'upload' !== $name ) {
 					$this->s3->delete( array( $key ) );
 				}
-				return new WP_Error( 'dtc_s3', 'Storage test failed at "' . $name . '": ' . $res->get_error_message() );
+				return new WP_Error( 'digifix_tc_s3', 'Storage test failed at "' . $name . '": ' . $res->get_error_message() );
 			}
 		}
 		return true;
@@ -121,7 +121,7 @@ class DTC_Bk_Remote {
 			'manual'   => 'm',
 			'update'   => 'u',
 		);
-		return gmdate( 'Ymd-His' ) . '-' . ( $full ? 'f' : 'i' ) . ( $t[ $trigger ] ?? 'm' ) . '-' . DTC_Bk_Util::random_hex( 2 );
+		return gmdate( 'Ymd-His' ) . '-' . ( $full ? 'f' : 'i' ) . ( $t[ $trigger ] ?? 'm' ) . '-' . Digifix_TC_Bk_Util::random_hex( 2 );
 	}
 
 	/** @return array{time:int,full:bool,trigger:string}|null */
@@ -146,10 +146,10 @@ class DTC_Bk_Remote {
 	 * ------------------------------------------------------------------ */
 
 	public static function site_uuid() {
-		$uuid = get_option( 'dtc_site_uuid' );
+		$uuid = get_option( 'digifix_tc_site_uuid' );
 		if ( ! is_string( $uuid ) || strlen( $uuid ) !== 32 ) {
-			$uuid = DTC_Bk_Util::random_hex( 16 );
-			update_option( 'dtc_site_uuid', $uuid, false );
+			$uuid = Digifix_TC_Bk_Util::random_hex( 16 );
+			update_option( 'digifix_tc_site_uuid', $uuid, false );
 		}
 		return $uuid;
 	}
@@ -179,8 +179,8 @@ class DTC_Bk_Remote {
 		if ( null === $info ) {
 			return $this->claim();
 		}
-		if ( ( $info['site_key'] ?? '' ) !== DTC_Bk_Util::site_key() ) {
-			return new WP_Error( 'dtc_owner', 'The backup folder "' . $this->folder . '" belongs to ' . ( $info['home'] ?? 'another site' ) . '. If this is a staging copy, choose a different folder in TotalCare → Settings. If the site moved to this address, use "Take over this folder" on the Backups page.' );
+		if ( ( $info['site_key'] ?? '' ) !== Digifix_TC_Bk_Util::site_key() ) {
+			return new WP_Error( 'digifix_tc_owner', 'The backup folder "' . $this->folder . '" belongs to ' . ( $info['home'] ?? 'another site' ) . '. If this is a staging copy, choose a different folder in TotalCare → Settings. If the site moved to this address, use "Take over this folder" on the Backups page.' );
 		}
 		return true;
 	}
@@ -188,10 +188,10 @@ class DTC_Bk_Remote {
 	public function claim() {
 		$res = $this->s3->put(
 			$this->key( 'site.json' ),
-			DTC_Bk_Util::json_encode(
+			Digifix_TC_Bk_Util::json_encode(
 				array(
 					'home'     => get_option( 'home' ),
-					'site_key' => DTC_Bk_Util::site_key(),
+					'site_key' => Digifix_TC_Bk_Util::site_key(),
 					'uuid'     => self::site_uuid(),
 					'claimed'  => time(),
 				)
@@ -235,7 +235,7 @@ class DTC_Bk_Remote {
 		}
 		$m = json_decode( $body, true );
 		if ( ! is_array( $m ) || ( $m['id'] ?? '' ) !== $id ) {
-			return new WP_Error( 'dtc_remote', 'Manifest of backup ' . $id . ' is unreadable.' );
+			return new WP_Error( 'digifix_tc_remote', 'Manifest of backup ' . $id . ' is unreadable.' );
 		}
 		$this->manifests[ $id ] = $m;
 		return $m;
@@ -243,7 +243,7 @@ class DTC_Bk_Remote {
 
 	public function put_manifest( array $m ) {
 		$this->manifests[ $m['id'] ] = $m;
-		$res                         = $this->s3->put( $this->backup_key( $m['id'], 'manifest.json' ), DTC_Bk_Util::json_encode( $m ), 'application/json' );
+		$res                         = $this->s3->put( $this->backup_key( $m['id'], 'manifest.json' ), Digifix_TC_Bk_Util::json_encode( $m ), 'application/json' );
 		return is_wp_error( $res ) ? $res : true;
 	}
 
@@ -348,7 +348,7 @@ class DTC_Bk_Remote {
 		krsort( $entries, SORT_STRING );
 		$res = $this->s3->put(
 			$this->key( 'catalog.json' ),
-			DTC_Bk_Util::json_encode(
+			Digifix_TC_Bk_Util::json_encode(
 				array(
 					'updated' => time(),
 					'backups' => $entries,

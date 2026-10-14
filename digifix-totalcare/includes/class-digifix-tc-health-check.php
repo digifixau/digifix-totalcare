@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Health_Check {
+class Digifix_TC_Health_Check {
 
 	const ERROR_MARKERS = array(
 		'There has been a critical error',
@@ -32,7 +32,7 @@ class DTC_Health_Check {
 
 	public static function urls() {
 		$urls  = array( home_url( '/' ), wp_login_url() );
-		$extra = preg_split( '/\R/', (string) DTC_Settings::get( 'health_urls' ), -1, PREG_SPLIT_NO_EMPTY );
+		$extra = preg_split( '/\R/', (string) Digifix_TC_Settings::get( 'health_urls' ), -1, PREG_SPLIT_NO_EMPTY );
 		foreach ( $extra as $url ) {
 			$url = trim( $url );
 			if ( $url && 0 === strpos( $url, home_url() ) ) {
@@ -45,12 +45,12 @@ class DTC_Health_Check {
 	public static function probe( $url ) {
 		$started = microtime( true );
 		$resp    = wp_remote_get(
-			add_query_arg( 'dtc_hc', wp_generate_password( 8, false ), $url ),
+			add_query_arg( 'digifix_tc_hc', wp_generate_password( 8, false ), $url ),
 			array(
 				'timeout'     => 30,
 				'redirection' => 3,
-				'sslverify'   => false,
-				'user-agent'  => 'Digifix-TotalCare-HealthCheck/' . DTC_VERSION,
+				'sslverify'   => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's filter for requests to this site itself.
+				'user-agent'  => 'Digifix-TotalCare-HealthCheck/' . DIGIFIX_TC_VERSION,
 				'headers'     => array(
 					'Cache-Control' => 'no-cache',
 					'Pragma'        => 'no-cache',
@@ -93,12 +93,12 @@ class DTC_Health_Check {
 			admin_url( 'admin-ajax.php' ),
 			array(
 				'timeout'   => 20,
-				'sslverify' => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's filter for requests to this site itself.
 				'body'      => array(
-					'action' => 'dtc_guardian_health',
+					'action' => 'digifix_tc_guardian_health',
 					'since'  => (int) $since,
 					'ts'     => $ts,
-					'sig'    => DTC_Storage::sign( 'dtc_guardian_health', $ts ),
+					'sig'    => Digifix_TC_Storage::sign( 'digifix_tc_guardian_health', $ts ),
 				),
 			)
 		);
@@ -140,7 +140,7 @@ class DTC_Health_Check {
 	 * @return array{passed:bool,hard:string[],soft:string[],pages:array}
 	 */
 	public static function check( array $baseline, $since ) {
-		$strict = (bool) DTC_Settings::get( 'health_strict' );
+		$strict = (bool) Digifix_TC_Settings::get( 'health_strict' );
 		$hard   = array();
 		$soft   = array();
 		$pages  = array();

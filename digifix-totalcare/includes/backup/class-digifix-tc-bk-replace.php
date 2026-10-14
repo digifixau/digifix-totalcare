@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_Bk_Replace {
+class Digifix_TC_Bk_Replace {
 
 	/**
 	 * Replacement map for a move from one address/path to another.

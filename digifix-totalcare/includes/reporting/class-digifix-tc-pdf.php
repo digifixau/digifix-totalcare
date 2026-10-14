@@ -9,16 +9,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class DTC_PDF {
+class Digifix_TC_PDF {
 
 	public static function available() {
 		return class_exists( '\Dompdf\Dompdf' );
 	}
 
 	public static function render_html( array $report ) {
-		$brand = DTC_Settings::get( 'brand_color' );
+		$brand = Digifix_TC_Settings::get( 'brand_color' );
 		ob_start();
-		include DTC_DIR . 'templates/report.php';
+		include DIGIFIX_TC_DIR . 'templates/report.php';
 		return (string) ob_get_clean();
 	}
 
@@ -29,8 +29,8 @@ class DTC_PDF {
 		if ( ! self::available() ) {
 			return false;
 		}
-		DTC_Storage::ensure_dirs();
-		$file = DTC_Storage::data_dir() . '/reports/care-report-' . sanitize_file_name( $report['period']['start'] . '-to-' . $report['period']['end'] ) . '.pdf';
+		Digifix_TC_Storage::ensure_dirs();
+		$file = Digifix_TC_Storage::data_dir() . '/reports/care-report-' . sanitize_file_name( $report['period']['start'] . '-to-' . $report['period']['end'] ) . '.pdf';
 
 		$options = new \Dompdf\Options();
 		$options->set( 'isRemoteEnabled', false );
