@@ -1,6 +1,6 @@
 <?php
 /**
- * Activity log view. Included from DTC_Admin::page_log() (class scope).
+ * Activity log view. Included from Digifix_TC_Admin::page_log() (class scope).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -8,66 +8,66 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only filters.
-$dtc_type  = sanitize_key( $_GET['type'] ?? '' );
-$dtc_level = sanitize_key( $_GET['level'] ?? '' );
-$dtc_page  = max( 1, (int) ( $_GET['paged'] ?? 1 ) );
+$digifix_tc_type  = sanitize_key( $_GET['type'] ?? '' );
+$digifix_tc_level = sanitize_key( $_GET['level'] ?? '' );
+$digifix_tc_page  = max( 1, absint( $_GET['paged'] ?? 1 ) );
 // phpcs:enable
 
-$dtc_res   = DTC_Logger::query(
+$digifix_tc_res   = Digifix_TC_Logger::query(
 	array(
-		'type'     => $dtc_type,
-		'level'    => $dtc_level,
+		'type'     => $digifix_tc_type,
+		'level'    => $digifix_tc_level,
 		'per_page' => 50,
-		'page'     => $dtc_page,
+		'page'     => $digifix_tc_page,
 	)
 );
-$dtc_pages = (int) ceil( $dtc_res['total'] / 50 );
+$digifix_tc_pages = (int) ceil( $digifix_tc_res['total'] / 50 );
 ?>
-<div class="wrap dtc-wrap">
+<div class="wrap digifix-tc-wrap">
 	<h1>Activity Log</h1>
 
-	<form method="get" class="dtc-filters">
-		<input type="hidden" name="page" value="dtc-log">
+	<form method="get" class="digifix-tc-filters">
+		<input type="hidden" name="page" value="digifix-tc-log">
 		<select name="type">
 			<option value="">All types</option>
-			<?php foreach ( array( 'backup', 'update', 'scan', 'restore', 'report', 'system' ) as $dtc_t ) : ?>
-				<option value="<?php echo esc_attr( $dtc_t ); ?>" <?php selected( $dtc_type, $dtc_t ); ?>><?php echo esc_html( ucfirst( $dtc_t ) ); ?></option>
+			<?php foreach ( array( 'backup', 'update', 'scan', 'restore', 'report', 'system' ) as $digifix_tc_t ) : ?>
+				<option value="<?php echo esc_attr( $digifix_tc_t ); ?>" <?php selected( $digifix_tc_type, $digifix_tc_t ); ?>><?php echo esc_html( ucfirst( $digifix_tc_t ) ); ?></option>
 			<?php endforeach; ?>
 		</select>
 		<select name="level">
 			<option value="">All levels</option>
-			<?php foreach ( array( 'success', 'info', 'warning', 'error' ) as $dtc_l ) : ?>
-				<option value="<?php echo esc_attr( $dtc_l ); ?>" <?php selected( $dtc_level, $dtc_l ); ?>><?php echo esc_html( ucfirst( $dtc_l ) ); ?></option>
+			<?php foreach ( array( 'success', 'info', 'warning', 'error' ) as $digifix_tc_l ) : ?>
+				<option value="<?php echo esc_attr( $digifix_tc_l ); ?>" <?php selected( $digifix_tc_level, $digifix_tc_l ); ?>><?php echo esc_html( ucfirst( $digifix_tc_l ) ); ?></option>
 			<?php endforeach; ?>
 		</select>
 		<button class="button">Filter</button>
-		<span class="description"><?php echo (int) $dtc_res['total']; ?> events</span>
+		<span class="description"><?php echo (int) $digifix_tc_res['total']; ?> events</span>
 	</form>
 
-	<table class="widefat striped dtc-events">
+	<table class="widefat striped digifix-tc-events">
 		<thead><tr><th>Time</th><th>Type</th><th>Event</th><th>Message</th><th>Job</th><th>Details</th></tr></thead>
 		<tbody>
-		<?php foreach ( $dtc_res['rows'] as $dtc_e ) : ?>
+		<?php foreach ( $digifix_tc_res['rows'] as $digifix_tc_e ) : ?>
 			<tr>
-				<td class="dtc-nowrap"><?php echo esc_html( get_date_from_gmt( $dtc_e['created_at'], 'Y-m-d H:i:s' ) ); ?></td>
-				<td><?php echo self::badge( $dtc_e['level'], $dtc_e['type'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
-				<td><code><?php echo esc_html( $dtc_e['code'] ); ?></code></td>
-				<td><?php echo esc_html( $dtc_e['message'] ); ?></td>
-				<td><?php echo $dtc_e['job_id'] ? '#' . (int) $dtc_e['job_id'] : ''; ?></td>
+				<td class="digifix-tc-nowrap"><?php echo esc_html( get_date_from_gmt( $digifix_tc_e['created_at'], 'Y-m-d H:i:s' ) ); ?></td>
+				<td><?php echo self::badge( $digifix_tc_e['level'], $digifix_tc_e['type'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
+				<td><code><?php echo esc_html( $digifix_tc_e['code'] ); ?></code></td>
+				<td><?php echo esc_html( $digifix_tc_e['message'] ); ?></td>
+				<td><?php echo $digifix_tc_e['job_id'] ? '#' . (int) $digifix_tc_e['job_id'] : ''; ?></td>
 				<td>
-					<?php if ( $dtc_e['context'] ) : ?>
-						<details><summary>View</summary><pre class="dtc-json"><?php echo esc_html( wp_json_encode( $dtc_e['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ); ?></pre></details>
+					<?php if ( $digifix_tc_e['context'] ) : ?>
+						<details><summary>View</summary><pre class="digifix-tc-json"><?php echo esc_html( wp_json_encode( $digifix_tc_e['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ); ?></pre></details>
 					<?php endif; ?>
 				</td>
 			</tr>
 		<?php endforeach; ?>
-		<?php if ( ! $dtc_res['rows'] ) : ?>
+		<?php if ( ! $digifix_tc_res['rows'] ) : ?>
 			<tr><td colspan="6">No events.</td></tr>
 		<?php endif; ?>
 		</tbody>
 	</table>
 
-	<?php if ( $dtc_pages > 1 ) : ?>
+	<?php if ( $digifix_tc_pages > 1 ) : ?>
 		<div class="tablenav"><div class="tablenav-pages">
 			<?php
 			echo wp_kses_post(
@@ -75,8 +75,8 @@ $dtc_pages = (int) ceil( $dtc_res['total'] / 50 );
 					array(
 						'base'    => add_query_arg( 'paged', '%#%' ),
 						'format'  => '',
-						'current' => $dtc_page,
-						'total'   => $dtc_pages,
+						'current' => $digifix_tc_page,
+						'total'   => $digifix_tc_pages,
 					)
 				)
 			);

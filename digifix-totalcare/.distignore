@@ -1,0 +1,5 @@
+# Files left out of the WordPress.org package (used by the release workflow).
+/.distignore
+/README.md
+/composer.lock
+.DS_Store
