@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Digifix TotalCare – WordPress backups, safe updates and reports on autopilot</title>
+  <meta name="description" content="A free WordPress plugin that backs your site up to your own S3 or Cloudflare R2 storage, rolls back updates that break the site, schedules Wordfence scans and sends client reports.">
+  <link rel="canonical" href="https://totalcare.digifix.com.au/">
+  <meta name="theme-color" content="#2271b1">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Digifix TotalCare">
+  <meta property="og:title" content="Digifix TotalCare – WordPress care that runs itself">
+  <meta property="og:description" content="Backups to your own S3 or R2 storage, safe updates with automatic rollback, scheduled Wordfence scans and client reports. Free and open source.">
+  <meta property="og:url" content="https://totalcare.digifix.com.au/">
+  <meta property="og:image" content="https://totalcare.digifix.com.au/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="en_AU">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Digifix TotalCare",
+    "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "WordPress plugin",
+    "operatingSystem": "WordPress 6.2 or later, PHP 7.4 or later",
+    "description": "Incremental backups to S3 or Cloudflare R2, one-click restores, safe updates with automatic rollback, Wordfence scans and client reports.",
+    "url": "https://totalcare.digifix.com.au/",
+    "downloadUrl": "https://github.com/digifixau/digifix-totalcare/releases/latest/download/digifix-totalcare.zip",
+    "license": "https://www.gnu.org/licenses/gpl-2.0.html",
+    "image": "https://totalcare.digifix.com.au/assets/og-image.png",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "AUD" },
+    "author": { "@type": "Organization", "name": "Digifix", "url": "https://digifix.com.au/" }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="Digifix TotalCare home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 4.5 7v8.2c0 7.3 4.9 12.4 11.5 14.3 6.6-1.9 11.5-7 11.5-14.3V7L16 2.5Z" fill="#2271b1"/><path d="m10.5 16.2 3.8 3.8 7.4-7.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Digifix</span> TotalCare
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#safe-updates">Safe updates</a>
+        <a href="#agencies">For agencies</a>
+        <a href="#get-started">Get started</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn btn-primary btn-sm" href="https://github.com/digifixau/digifix-totalcare/releases/latest/download/digifix-totalcare.zip">Download</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          Free WordPress plugin
+        </span>
+        <h1>WordPress care that <em>runs itself</em>, and tells you what it did.</h1>
+        <p class="lede">TotalCare backs your site up to your own cloud storage, updates plugins one at a time and undoes any update that breaks the site, runs scheduled malware scans, and reports on all of it to you and your clients.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/digifixau/digifix-totalcare/releases/latest/download/digifix-totalcare.zip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg>
+            Download the plugin
+          </a>
+          <a class="btn btn-secondary" href="#safe-updates">See how it works</a>
+        </div>
+        <ul class="hero-meta">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Free and open source (GPLv2+)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>No tracking or telemetry</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>WordPress.org listing coming soon</li>
+        </ul>
+
+        <figure class="frame hero-shot">
+          <div class="frame-bar" aria-hidden="true">
+            <span class="frame-dots"><i></i><i></i><i></i></span>
+            <span class="frame-url">example.com.au/wp-admin/admin.php?page=digifix-tc-dashboard</span>
+          </div>
+          <a class="frame-link" href="/assets/dashboard-1600.webp" aria-label="Open full-size screenshot"><img src="/assets/dashboard-1600.webp"
+               srcset="/assets/dashboard-800.webp 800w, /assets/dashboard-1600.webp 1600w"
+               sizes="(min-width: 1140px) 1076px, calc(100vw - 32px)"
+               width="1600" height="938"
+               alt="The TotalCare dashboard in WordPress admin. Status cards show backups, Wordfence scans, the guardian and the scheduler all healthy. Below are the last and next backup, update run and malware scan, and a recent activity log."></a>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 3 a.m. story -->
+    <section class="section section-alt after-hero" aria-labelledby="story-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <span class="kicker">Why it exists</span>
+          <h2 id="story-title">It's 3 a.m. and a plugin update has just broken a client's site.</h2>
+          <p>By the time anyone's awake, it's already fixed.</p>
+        </div>
+        <ol class="story">
+          <li>
+            <time>3:00</time>
+            <p><strong>Update run starts</strong>A backup is taken first, then plugins are updated one at a time.</p>
+          </li>
+          <li class="bad">
+            <time>3:02</time>
+            <p><strong>An update breaks the site</strong>Every page shows "There has been a critical error on this website".</p>
+          </li>
+          <li class="good">
+            <time>3:02</time>
+            <p><strong>Rolled back on its own</strong>The previous version goes back in, the site passes its health check, and that version is skipped from now on.</p>
+          </li>
+          <li>
+            <time>7:30</time>
+            <p><strong>An email is waiting</strong>It explains what was updated, what was rolled back, and what happened.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">What it does</span>
+          <h2 id="features-title">Four jobs, done on a schedule, without you.</h2>
+          <p>Install it once, connect your storage, and TotalCare looks after the routine work. Everything it does is logged and reported.</p>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v8m0-8-3 3m3-3 3 3"/></svg></div>
+            <h3>Backups to your own storage</h3>
+            <p>Amazon S3, Cloudflare R2, Wasabi, DigitalOcean Spaces, MinIO or any S3-compatible service. A full backup weekly and only the changed files in between.</p>
+          </article>
+          <article class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg></div>
+            <h3>Safe updates</h3>
+            <p>Plugins, themes and WordPress core, one item at a time, with a health check after each. Anything that breaks the site is rolled back automatically.</p>
+          </article>
+          <article class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.7 3.2 8 7.5 9.5 4.3-1.5 7.5-4.8 7.5-9.5V6L12 3Z"/><path d="M12 8v4.5"/><path d="M12 16h.01"/></svg></div>
+            <h3>Malware scans</h3>
+            <p>Runs Wordfence scans on TotalCare's own schedule and alerts you straight away when serious issues are found.</p>
+          </article>
+          <article class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></div>
+            <h3>Reports</h3>
+            <p>A dashboard and activity log in wp-admin, email alerts and summaries, a monthly client report as a PDF, and a signed webhook for your tools.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Backups & restores -->
+    <section class="section section-alt" id="backups" aria-labelledby="backups-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Backups &amp; restores</span>
+          <h2 id="backups-title">Small daily backups. Restores that put back only what changed.</h2>
+        </div>
+        <div class="split">
+          <div>
+            <h3>Backups</h3>
+            <ul class="checklist">
+              <li><strong>Weekly full, daily incremental.</strong> Only changed files are uploaded between full backups. The database is saved in full every time.</li>
+              <li><strong>Your retention rules.</strong> Keep the newest N, plus daily, weekly and monthly copies. Pinned backups are never deleted.</li>
+              <li><strong>Built for cheap shared hosting.</strong> Memory use stays flat however big the site is, and only about 16 MB of disk is used while a backup runs.</li>
+              <li><strong>No lock-in.</strong> Archives are ordinary <code>.tar.gz</code> and <code>.sql.gz</code> files you can open with any tool.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Restores</h3>
+            <ul class="checklist">
+              <li><strong>All of it, or just part.</strong> The database, plugins, themes, uploads or a single folder.</li>
+              <li><strong>Same site, fresh install or a new domain.</strong> URLs and paths are rewritten everywhere, including serialised data, and a different table prefix is handled.</li>
+              <li><strong>The site stays online.</strong> The database is imported into temporary tables, then swapped in at once.</li>
+              <li><strong>Works even when a plugin is broken.</strong> Restores run before other plugins load.</li>
+            </ul>
+          </div>
+        </div>
+        <figure class="frame split-shot">
+          <div class="frame-bar" aria-hidden="true">
+            <span class="frame-dots"><i></i><i></i><i></i></span>
+            <span class="frame-url">example.com.au/wp-admin/admin.php?page=digifix-tc-backups</span>
+          </div>
+          <a class="frame-link" href="/assets/backups-1600.webp" aria-label="Open full-size screenshot"><img src="/assets/backups-1600.webp"
+               srcset="/assets/backups-800.webp 800w, /assets/backups-1600.webp 1600w"
+               sizes="(min-width: 1140px) 1076px, calc(100vw - 32px)"
+               width="1600" height="938" loading="lazy"
+               alt="The TotalCare Backups page listing a full backup of 262.6 MB followed by daily incremental backups of around 9 MB each, with Restore, Pin and Download actions for every backup."></a>
+        </figure>
+        <p class="caption">One full backup, then about 9 MB a day for a site with 27,000 files.</p>
+      </div>
+    </section>
+
+    <!-- Safe updates -->
+    <section class="section" id="safe-updates" aria-labelledby="updates-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">How safe updates work</span>
+          <h2 id="updates-title">Every update gets a safety net.</h2>
+          <p>Updates run on a schedule you choose. TotalCare checks the site after every single item, so one bad release never takes the rest down with it.</p>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Back up first</h3>
+            <p>A backup is taken before anything changes.</p>
+          </li>
+          <li>
+            <h3>One item at a time</h3>
+            <p>Each plugin, theme or core update is installed on its own.</p>
+          </li>
+          <li>
+            <h3>Health check</h3>
+            <p>The site is checked after every item.</p>
+          </li>
+          <li class="warn">
+            <h3>Roll back if broken</h3>
+            <p>The previous copy goes back in, and that version is skipped until a newer one is released.</p>
+          </li>
+          <li class="done">
+            <h3>Report</h3>
+            <p>You get an email. If the site is still broken, it's restored from the pre-run backup first.</p>
+          </li>
+        </ol>
+        <p class="note"><strong>The guardian.</strong> A small must-use plugin that loads before everything else. If a PHP fatal error stops every request, it swaps the previous version back on the very next request, so TotalCare can repair a site that can't even load its admin.</p>
+      </div>
+    </section>
+
+    <!-- Agencies -->
+    <section class="section section-alt" id="agencies" aria-labelledby="agencies-title">
+      <div class="wrap">
+        <div class="agency">
+          <div>
+            <div class="section-head">
+              <span class="kicker">For agencies &amp; freelancers</span>
+              <h2 id="agencies-title">Look after every client site the same way.</h2>
+            </div>
+            <div class="agency-list">
+              <div>
+                <h3>One bucket for all your sites</h3>
+                <p>Each site gets its own folder. Every folder knows which site owns it, so a staging copy can never overwrite or prune the live site's backups.</p>
+              </div>
+              <div>
+                <h3>Move sites between domains</h3>
+                <p>Install TotalCare on the new site, point it at the same bucket, and restore from <em>Other sites in this bucket</em>. URLs, paths and table prefix are adjusted for you.</p>
+              </div>
+              <div>
+                <h3>Client-ready reporting</h3>
+                <p>Failure alerts and summaries go to you and, if you choose, to your client. A monthly report is ready as a PDF or a printable page.</p>
+              </div>
+              <div>
+                <h3>Plugs into your tools</h3>
+                <p>A signed JSON webhook for Slack, n8n and similar, plus WP-CLI commands for scripting.</p>
+              </div>
+            </div>
+          </div>
+          <div class="terminal" role="img" aria-label="Example WP-CLI commands: wp totalcare backup, list, restore, verify and prune.">
+            <div class="terminal-bar">WP-CLI</div>
+<pre><span class="p">$</span> wp totalcare backup
+<span class="p">$</span> wp totalcare list
+<span class="p">$</span> wp totalcare restore
+<span class="p">$</span> wp totalcare verify
+<span class="p">$</span> wp totalcare prune
+<span class="c"># wp help totalcare for all options</span></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Transparency -->
+    <section class="section" aria-labelledby="transparent-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Nothing hidden</span>
+          <h2 id="transparent-title">Your data stays yours.</h2>
+          <p>TotalCare doesn't run a storage service of its own and sends nothing to Digifix.</p>
+        </div>
+        <div class="facts">
+          <article class="card">
+            <h3>Your storage only</h3>
+            <p>Backups go only to the bucket you configure, over HTTPS. No local copies are kept, and the secret key is stored encrypted.</p>
+          </article>
+          <article class="card">
+            <h3>No tracking</h3>
+            <p>No telemetry and no analytics. The only outside connections are your storage, an optional webhook you set, and your own site.</p>
+          </article>
+          <article class="card">
+            <h3>Exactly what it adds</h3>
+            <ul>
+              <li>Two database tables (job queue and activity log)</li>
+              <li>Two folders in <code>wp-content</code></li>
+              <li>The guardian must-use plugin</li>
+              <li>A short <code>.htaccess</code> rule for LiteSpeed</li>
+            </ul>
+            <p>Deleting the plugin removes all of it. Your backups in storage are never touched.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Get started -->
+    <section class="section section-alt" id="get-started" aria-labelledby="start-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Get started</span>
+          <h2 id="start-title">Up and running in four steps.</h2>
+        </div>
+        <div class="start">
+          <ol class="install">
+            <li><strong>Install and activate</strong>Upload the zip under Plugins → Add New → Upload Plugin. TotalCare appears in the sidebar.</li>
+            <li><strong>Connect your storage</strong>Under TotalCare → Settings → Remote storage, enter your bucket details. Saving tests upload, download, list and delete with a small file.</li>
+            <li><strong>Check the schedules</strong>Set when backups, updates and scans run, and who should get the reports.</li>
+            <li><strong>Add a real cron job (recommended)</strong>WP-Cron only runs when the site gets visitors. Call <code>wp-cron.php</code> every minute from your host, then use "Test background requests" in Settings to confirm your host lets work finish.</li>
+          </ol>
+          <div class="card reqs">
+            <h3>Requirements</h3>
+            <ul class="checklist">
+              <li>WordPress 6.2+ and PHP 7.4+</li>
+              <li>A single-site install (not multisite)</li>
+              <li>MySQL or MariaDB through <code>mysqli</code></li>
+              <li>A bucket on any S3-compatible service</li>
+              <li>The free Wordfence plugin, for malware scans only</li>
+            </ul>
+            <p class="caption caption-left">Works on shared hosts including Hostinger and LiteSpeed servers.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <span class="kicker">FAQ</span>
+          <h2 id="faq-title">Questions, answered.</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Do I need Wordfence?</summary>
+            <p>Only for malware scans. Backups, restores, safe updates and reports all work without it.</p>
+          </details>
+          <details>
+            <summary>Where are my backups stored?</summary>
+            <p>Only in the bucket you configure: Amazon S3, Cloudflare R2 or another S3-compatible service. TotalCare doesn't run a storage service of its own and keeps no local copies of backups.</p>
+          </details>
+          <details>
+            <summary>What happens if an update breaks my site?</summary>
+            <p>The update is rolled back straight away from a copy of the plugin or theme taken just before. If a PHP fatal error stops every request, the guardian swaps the copy back on the next request. If the site is still broken after the run, TotalCare restores the database and code from the backup taken before the run, and emails you.</p>
+          </details>
+          <details>
+            <summary>Can I move a site to a new domain with it?</summary>
+            <p>Yes. Install WordPress and TotalCare on the new site, enter the same bucket details, then go to Backups → Other sites in this bucket and restore the old site's latest backup. URLs, paths and the table prefix are adjusted for you. Afterwards you log in with the old site's users.</p>
+          </details>
+          <details>
+            <summary>Can a staging copy overwrite my live site's backups?</summary>
+            <p>No. Each backup folder records which site owns it, and a site with a different address refuses to write to or prune that folder. After a real domain change, use Backups → Take over this folder.</p>
+          </details>
+          <details>
+            <summary>Does it work on LiteSpeed or Hostinger?</summary>
+            <p>Yes. TotalCare was built for shared hosting and adds the LiteSpeed rule that background requests need. Use the "Test background requests" button in Settings to check your host.</p>
+          </details>
+          <details>
+            <summary>I'm moving from WPvivid. What happens to my old backups?</summary>
+            <p>They stay where they are and can still be restored with WPvivid. TotalCare's first backup is a full one.</p>
+          </details>
+          <details>
+            <summary>Does it support multisite?</summary>
+            <p>No, only single-site installs.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="section section-cta" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta">
+          <h2 id="cta-title">Stop babysitting updates.</h2>
+          <p>TotalCare is free and open source. Download the latest release from GitHub; the WordPress.org listing is on its way.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://github.com/digifixau/digifix-totalcare/releases/latest/download/digifix-totalcare.zip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg>
+              Download the plugin
+            </a>
+            <a class="btn btn-secondary" href="https://github.com/digifixau/digifix-totalcare">View source on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>© <a href="https://digifix.com.au/">Digifix</a>. TotalCare is licensed under the GPLv2 or later.</p>
+      <nav aria-label="Footer">
+        <a href="https://github.com/digifixau/digifix-totalcare">GitHub</a>
+        <a href="https://github.com/digifixau/digifix-totalcare/releases">Releases</a>
+        <a href="https://digifix.com.au/">digifix.com.au</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
