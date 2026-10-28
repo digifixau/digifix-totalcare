@@ -24,7 +24,7 @@ class Digifix_TC_Admin {
 	}
 
 	public static function menu() {
-		add_menu_page( 'TotalCare', 'TotalCare', self::CAP, 'digifix-tc-dashboard', array( __CLASS__, 'page_dashboard' ), 'dashicons-shield-alt', 3 );
+		add_menu_page( 'TotalCare', 'TotalCare', self::CAP, 'digifix-tc-dashboard', array( __CLASS__, 'page_dashboard' ), 'dashicons-shield-alt' );
 		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Dashboard', 'Dashboard', self::CAP, 'digifix-tc-dashboard', array( __CLASS__, 'page_dashboard' ) );
 		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Backups', 'Backups', self::CAP, 'digifix-tc-backups', array( __CLASS__, 'page_backups' ) );
 		add_submenu_page( 'digifix-tc-dashboard', 'TotalCare Activity Log', 'Activity Log', self::CAP, 'digifix-tc-log', array( __CLASS__, 'page_log' ) );
@@ -42,6 +42,13 @@ class Digifix_TC_Admin {
 			return;
 		}
 		wp_enqueue_style( 'digifix-tc-admin', DIGIFIX_TC_URL . 'admin/admin.css', array(), DIGIFIX_TC_VERSION );
+		self::register_script();
+		wp_enqueue_script( 'digifix-tc-admin' );
+	}
+
+	/** Confirmations, form targets and the report's print button. */
+	public static function register_script() {
+		wp_register_script( 'digifix-tc-admin', DIGIFIX_TC_URL . 'admin/admin.js', array(), DIGIFIX_TC_VERSION, true );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -343,8 +350,7 @@ class Digifix_TC_Admin {
 			}
 		}
 		nocache_headers();
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- template escapes its output.
-		echo str_replace( '</body>', '<p class="noprint" style="text-align:center;margin:20px"><button onclick="window.print()">Print / Save as PDF</button></p></body>', Digifix_TC_PDF::render_html( $rep ) );
+		echo Digifix_TC_PDF::render_html( $rep, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- template escapes its output.
 		exit;
 	}
 
@@ -353,7 +359,7 @@ class Digifix_TC_Admin {
 	 * ------------------------------------------------------------------ */
 
 	private static function form( $action, $label, array $fields = array(), $class = 'button', $confirm = '' ) {
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="digifix-tc-inline"' . ( $confirm ? ' onsubmit="return confirm(' . esc_attr( wp_json_encode( $confirm ) ) . ');"' : '' ) . '>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="digifix-tc-inline"' . ( $confirm ? ' data-digifix-tc-confirm="' . esc_attr( $confirm ) . '"' : '' ) . '>';
 		echo '<input type="hidden" name="action" value="' . esc_attr( $action ) . '">';
 		wp_nonce_field( $action );
 		foreach ( $fields as $name => $value ) {

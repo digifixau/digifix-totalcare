@@ -805,9 +805,9 @@ class Digifix_TC_Bk_Restore_Engine {
 			$this->stop_member = true;
 			return;
 		}
+		$this->ensure_parent( $root, $this->row['path'] );
 		$target = $root . '/' . $this->row['path'];
 		if ( '2' === $hdr['type'] ) {
-			$this->ensure_dir( dirname( $target ) );
 			if ( is_link( $target ) || is_file( $target ) ) {
 				wp_delete_file( $target );
 			}
@@ -820,8 +820,10 @@ class Digifix_TC_Bk_Restore_Engine {
 			);
 			return;
 		}
-		$this->ensure_dir( dirname( $target ) );
-		$tmp      = $target . '.dtctmp';
+		$tmp = $target . '.dtctmp';
+		if ( is_link( $tmp ) || file_exists( $tmp ) ) {
+			wp_delete_file( $tmp ); // Never write through a link left at the temporary name.
+		}
 		$f['out'] = array(
 			'path'    => $this->row['path'],
 			'tmp'     => $tmp,
@@ -862,6 +864,12 @@ class Digifix_TC_Bk_Restore_Engine {
 				$this->out_fh = null;
 			}
 			$tmp = $f['out']['tmp'];
+			// The temporary file was created by this restore inside a checked
+			// folder; re-check in case the folder changed since an earlier request.
+			$this->ensure_parent( $root, $f['out']['path'] );
+			if ( is_link( $tmp ) ) {
+				throw new Digifix_TC_Bk_Exception( esc_html( 'Refusing to write ' . $target . ': its temporary file was replaced by a link.' ) );
+			}
 			if ( ! file_exists( $tmp ) ) {
 				touch( $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch
 			}
@@ -888,15 +896,40 @@ class Digifix_TC_Bk_Restore_Engine {
 		}
 	}
 
-	private function ensure_dir( $dir ) {
-		if ( ! is_dir( $dir ) ) {
-			if ( file_exists( $dir ) || is_link( $dir ) ) {
-				wp_delete_file( $dir );
+	/**
+	 * Make sure every folder between the area root and the file's folder is a
+	 * real folder inside the root, so a restore never writes through a
+	 * symbolic link to a place outside it. Backups never contain files below
+	 * a symlinked folder (links are stored as links), so a link found where
+	 * the backup has a folder is replaced by a folder. Only the link itself
+	 * is removed, never what it points to.
+	 */
+	private function ensure_parent( $root, $rel ) {
+		$parts = explode( '/', (string) $rel );
+		array_pop( $parts );
+		$dir = $root;
+		foreach ( $parts as $part ) {
+			if ( '' === $part || '.' === $part || '..' === $part ) {
+				throw new Digifix_TC_Bk_Exception( esc_html( 'Invalid path in backup: ' . $rel ) );
 			}
-			if ( ! @mkdir( $dir, $this->e['same'] ? 0755 : 0755, true ) && ! is_dir( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
-				throw new Digifix_TC_Bk_Exception( esc_html( 'Cannot create folder ' . $dir . '.' ) );
+			$dir .= '/' . $part;
+			if ( is_link( $dir ) ) {
+				wp_delete_file( $dir );
+				clearstatcache( true, $dir );
+				if ( is_link( $dir ) ) {
+					throw new Digifix_TC_Bk_Exception( esc_html( 'Cannot replace the symbolic link ' . $dir . ' with a folder.' ) );
+				}
+			}
+			if ( ! is_dir( $dir ) ) {
+				if ( file_exists( $dir ) ) {
+					wp_delete_file( $dir );
+				}
+				if ( ! @mkdir( $dir, 0755 ) && ! is_dir( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+					throw new Digifix_TC_Bk_Exception( esc_html( 'Cannot create folder ' . $dir . '.' ) );
+				}
 			}
 		}
+		return $dir;
 	}
 
 	/* ---------------------------------------------------------------------

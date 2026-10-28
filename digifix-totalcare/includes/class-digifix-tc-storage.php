@@ -93,6 +93,27 @@ class Digifix_TC_Storage {
 	}
 
 	/**
+	 * Authenticate a background (loopback) request to admin-ajax.php.
+	 *
+	 * These requests are sent by this site to itself (see loopback()) from
+	 * WP-Cron or another background request, so there is no logged-in user
+	 * and a nonce cannot be used. Instead each request carries an HMAC-SHA256
+	 * signature of the action and a timestamp, made with a 64-character
+	 * secret that is stored only on this server; it is valid for 5 minutes.
+	 * Requests without a valid signature are rejected with HTTP 403 before
+	 * any other input is read.
+	 */
+	public static function verify_loopback( $action ) {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- this IS the request verification (HMAC signature instead of a nonce, see above).
+		$ts  = isset( $_POST['ts'] ) ? absint( $_POST['ts'] ) : 0;
+		$sig = isset( $_POST['sig'] ) ? preg_replace( '/[^a-f0-9]/', '', sanitize_text_field( wp_unslash( $_POST['sig'] ) ) ) : '';
+		// phpcs:enable
+		if ( ! $ts || 64 !== strlen( $sig ) || ! self::verify( $action, $ts, $sig ) ) {
+			wp_send_json( array( 'ok' => false ), 403 );
+		}
+	}
+
+	/**
 	 * Fire-and-forget POST to admin-ajax.php signed with the shared secret.
 	 */
 	public static function loopback( $action, $extra = array() ) {

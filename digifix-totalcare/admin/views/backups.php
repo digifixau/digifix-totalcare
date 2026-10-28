@@ -116,7 +116,7 @@ $digifix_tc_triggers = array(
 							<td class="digifix-tc-actions">
 								<details>
 									<summary class="button">Restore…</summary>
-									<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="digifix-tc-restore-form" onsubmit="return confirm(<?php echo esc_attr( wp_json_encode( ( $digifix_tc_foreign ? 'Replace THIS site with the backup of ' . $digifix_tc_remote->folder : 'Restore the selected parts from the backup of ' . $digifix_tc_date ) . '? Changes made since then will be lost.' ) ); ?>);">
+									<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="digifix-tc-restore-form" data-digifix-tc-confirm="<?php echo esc_attr( ( $digifix_tc_foreign ? 'Replace THIS site with the backup of ' . $digifix_tc_remote->folder : 'Restore the selected parts from the backup of ' . $digifix_tc_date ) . '? Changes made since then will be lost.' ); ?>">
 										<input type="hidden" name="action" value="digifix_tc_restore">
 										<input type="hidden" name="backup_id" value="<?php echo esc_attr( $digifix_tc_b['id'] ); ?>">
 										<input type="hidden" name="folder" value="<?php echo esc_attr( $digifix_tc_foreign ? $digifix_tc_remote->folder : '' ); ?>">

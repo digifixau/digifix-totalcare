@@ -37,6 +37,7 @@ final class Digifix_TC_Plugin {
 		add_action( 'upgrader_process_complete', array( $this, 'after_self_update' ), 10, 2 );
 		add_action( 'digifix_tc_after_self_update', array( 'Digifix_TC_Installer', 'maybe_upgrade' ) );
 		add_filter( 'auto_update_plugin', array( $this, 'defer_auto_update' ), 20, 2 );
+		add_filter( 'upgrader_pre_install', array( $this, 'block_update_during_restore' ), 10, 2 );
 
 		if ( is_admin() ) {
 			Digifix_TC_Admin::init();
@@ -72,13 +73,23 @@ final class Digifix_TC_Plugin {
 		return $update;
 	}
 
-	/** Loopback endpoint that advances the job engine immediately. */
-	public function ajax_kick() {
-		$ts  = isset( $_POST['ts'] ) ? (int) $_POST['ts'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$sig = isset( $_POST['sig'] ) ? sanitize_text_field( wp_unslash( $_POST['sig'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		if ( ! Digifix_TC_Storage::verify( 'digifix_tc_kick', $ts, $sig ) ) {
-			wp_send_json( array( 'ok' => false ), 403 );
+	/**
+	 * The guardian runs restores with the engine in this plugin's folder, so
+	 * TotalCare itself is not replaced while a restore is running.
+	 */
+	public function block_update_during_restore( $response, $hook_extra ) {
+		if ( ( $hook_extra['plugin'] ?? '' ) === DIGIFIX_TC_BASENAME && Digifix_TC_Restore::in_progress() ) {
+			return new WP_Error( 'digifix_tc_restore_running', 'Digifix TotalCare cannot be updated while a site restore is running. Try again when the restore has finished.' );
 		}
+		return $response;
+	}
+
+	/**
+	 * Loopback endpoint that advances the job engine immediately. Only this
+	 * site can call it: see Digifix_TC_Storage::verify_loopback().
+	 */
+	public function ajax_kick() {
+		Digifix_TC_Storage::verify_loopback( 'digifix_tc_kick' );
 		Digifix_TC_Jobs::tick();
 		wp_send_json( array( 'ok' => true ) );
 	}
@@ -89,13 +100,9 @@ final class Digifix_TC_Plugin {
 	 * requests (LiteSpeed without "noabort") never reach the end.
 	 */
 	public function ajax_probe() {
-		$ts  = isset( $_POST['ts'] ) ? (int) $_POST['ts'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$sig = isset( $_POST['sig'] ) ? sanitize_text_field( wp_unslash( $_POST['sig'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		if ( ! Digifix_TC_Storage::verify( 'digifix_tc_probe', $ts, $sig ) ) {
-			wp_send_json( array( 'ok' => false ), 403 );
-		}
+		Digifix_TC_Storage::verify_loopback( 'digifix_tc_probe' );
 		ignore_user_abort( true );
-		$token = sanitize_key( wp_unslash( $_POST['token'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$token = sanitize_key( wp_unslash( $_POST['token'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- signature checked by verify_loopback() above.
 		sleep( 6 );
 		update_option( 'digifix_tc_probe_result', array( 'token' => $token, 'time' => time() ), false );
 		wp_send_json( array( 'ok' => true ) );

@@ -2,12 +2,17 @@
 /**
  * Plugin Name: Digifix TotalCare Guardian
  * Description: Safety net for Digifix TotalCare. Records PHP fatal errors, rolls back a plugin/theme update that crashes the site, and drives site restores before other plugins load. Installed and removed automatically by Digifix TotalCare.
- * Version:     1.2.0
+ * Version:     1.2.1
  * Author:      Digifix
  *
  * This file must stay self-contained: it runs when a broken plugin crashes
  * every request, and drives restores before regular plugins and the theme
- * load (TotalCare's engine is loaded from a pinned copy in digifix-tc-data).
+ * load (TotalCare's restore engine is loaded from the plugin's own folder,
+ * which a restore never overwrites).
+ *
+ * Where mu-plugins is read-only, this same file is installed as the
+ * wp-content/fatal-error-handler.php drop-in instead. It returns nothing
+ * there, so WordPress keeps its default fatal error handler.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,7 +24,7 @@ if ( defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) ) {
 	return;
 }
 
-define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.0' );
+define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.1' );
 
 final class Digifix_TC_Guardian {
 
@@ -102,10 +107,18 @@ final class Digifix_TC_Guardian {
 		return $secret ? hash_hmac( 'sha256', $action . '|' . $ts, $secret ) : '';
 	}
 
+	/**
+	 * Authenticate a background (loopback) request. They are sent by this
+	 * site to itself with no logged-in user, so a nonce cannot be used; each
+	 * one carries an HMAC-SHA256 signature of the action and a timestamp,
+	 * made with a secret stored only on this server (valid for 5 minutes).
+	 */
 	private static function verify_request( $action ) {
-		$ts  = isset( $_POST['ts'] ) ? (int) $_POST['ts'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$sig = isset( $_POST['sig'] ) ? (string) wp_unslash( $_POST['sig'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$exp = self::sign( $action, $ts );
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- this IS the request verification (HMAC signature instead of a nonce, see above).
+		$ts  = isset( $_POST['ts'] ) ? absint( $_POST['ts'] ) : 0;
+		$sig = isset( $_POST['sig'] ) ? preg_replace( '/[^a-f0-9]/', '', sanitize_text_field( wp_unslash( $_POST['sig'] ) ) ) : '';
+		// phpcs:enable
+		$exp = $ts ? self::sign( $action, $ts ) : '';
 		return $exp && abs( time() - $ts ) <= 300 && hash_equals( $exp, $sig );
 	}
 
@@ -172,7 +185,7 @@ final class Digifix_TC_Guardian {
 
 		$req     = self::read( 'restore-request' );
 		$legacy  = 'totalcare' !== ( $req['engine'] ?? 'wpvivid' );
-		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'digifix_tc_guardian_restore' === $_POST['action'] ) : self::$driving; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'digifix_tc_guardian_restore' === $_POST['action'] ) : self::$driving; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput -- only compared with a fixed string to tell whether this request was a restore step.
 		if ( $req && in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing' ), true ) && $restore ) {
 			$req['errors'] = (int) ( $req['errors'] ?? 0 ) + 1;
 			$req['error']  = 'PHP fatal during restore: ' . $entry['message'] . ' in ' . $entry['file'] . ':' . $entry['line'];
@@ -252,7 +265,7 @@ final class Digifix_TC_Guardian {
 		if ( ! self::verify_request( 'digifix_tc_guardian_health' ) ) {
 			wp_send_json( array( 'ok' => false ), 403 );
 		}
-		$since  = isset( $_POST['since'] ) ? (int) $_POST['since'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$since  = isset( $_POST['since'] ) ? absint( $_POST['since'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- signature checked by verify_request() above.
 		$fatals = array_values(
 			array_filter(
 				(array) self::read( 'fatals' ),
@@ -285,7 +298,8 @@ final class Digifix_TC_Guardian {
 			return;
 		}
 		$done  = true;
-		$token = isset( $_GET['digifix_tc_restore_status'] ) ? (string) wp_unslash( $_GET['digifix_tc_restore_status'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// Read-only progress page; the 128-bit random token in the link is the credential.
+		$token = isset( $_GET['digifix_tc_restore_status'] ) ? preg_replace( '/[^a-f0-9]/', '', sanitize_text_field( wp_unslash( $_GET['digifix_tc_restore_status'] ) ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		if ( ! file_exists( self::dir() . '/restore-request.json' ) ) {
 			// Progress page of a restore that has already been reconciled.
 			$last = '' !== $token ? self::read( 'restore-last' ) : null;
@@ -393,7 +407,7 @@ final class Digifix_TC_Guardian {
 		self::write( 'restore-request', $req );
 
 		self::$driving = true;
-		$loader        = rtrim( (string) ( $req['engine_dir'] ?? '' ), '/' ) . '/loader.php';
+		$loader        = self::engine_loader( $req );
 		try {
 			if ( ! is_readable( $loader ) ) {
 				throw new Exception( esc_html( 'The restore engine is missing (' . $loader . ').' ) );
@@ -437,6 +451,16 @@ final class Digifix_TC_Guardian {
 		);
 	}
 
+	/** The restore engine lives in TotalCare's own plugin folder. */
+	private static function engine_loader( array $req ) {
+		$basename = str_replace( '\\', '/', (string) ( $req['plugin_basename'] ?? '' ) );
+		$folder   = false !== strpos( $basename, '/' ) ? substr( $basename, 0, strpos( $basename, '/' ) ) : '';
+		if ( '' === $folder || '.' === $folder || '..' === $folder ) {
+			return '';
+		}
+		return WP_PLUGIN_DIR . '/' . $folder . '/includes/backup/loader.php';
+	}
+
 	private static function json( array $data, $code = 200 ) {
 		if ( ! headers_sent() ) {
 			http_response_code( $code );
@@ -456,15 +480,39 @@ final class Digifix_TC_Guardian {
 		header( 'Content-Type: text/html; charset=utf-8' );
 	}
 
+	const PAGE_CSS = 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f7;color:#1d2327;margin:0;padding:24px 16px}'
+		. 'main{max-width:720px;margin:0 auto;background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px}'
+		. 'main.digifix-tc-maint{max-width:460px;margin-top:20vh;text-align:center}h1{font-size:22px}'
+		. 'pre{white-space:pre-wrap;word-break:break-word;background:#f6f7f7;padding:12px;font-size:12px;max-height:50vh;overflow:auto}'
+		. '.digifix-tc-status{font-weight:600}.digifix-tc-error{color:#b32d2e}';
+
+	/**
+	 * Print the stylesheet of the maintenance and progress pages through the
+	 * WordPress styles API. These pages are rendered before plugins and the
+	 * theme load (no wp_head()), so the style is registered and printed here.
+	 */
+	private static function print_page_styles() {
+		if ( ! function_exists( 'wp_register_style' ) || ! function_exists( 'wp_add_inline_style' ) || ! function_exists( 'wp_print_styles' ) ) {
+			return;
+		}
+		try {
+			wp_register_style( 'digifix-tc-guardian', false, array(), DIGIFIX_TC_GUARDIAN_VERSION );
+			wp_add_inline_style( 'digifix-tc-guardian', self::PAGE_CSS );
+			wp_print_styles( 'digifix-tc-guardian' );
+		} catch ( Throwable $e ) {
+			return; // The page is still readable without styles.
+		}
+	}
+
 	private static function render_maintenance() {
 		self::no_cache_headers();
 		if ( ! headers_sent() ) {
 			http_response_code( 503 );
 			header( 'Retry-After: 120' );
 		}
-		echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="60"><title>Maintenance</title>'
-			. '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f7;color:#1d2327;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:16px}main{max-width:460px;text-align:center}h1{font-size:22px}</style>'
-			. '</head><body><main><h1>Scheduled maintenance</h1><p>This site is being updated and will be back in a few minutes.</p></main></body></html>';
+		echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="60"><title>Maintenance</title>';
+		self::print_page_styles();
+		echo '</head><body><main class="digifix-tc-maint"><h1>Scheduled maintenance</h1><p>This site is being updated and will be back in a few minutes.</p></main></body></html>';
 		exit;
 	}
 
@@ -482,11 +530,13 @@ final class Digifix_TC_Guardian {
 		);
 		echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
 			. ( $active ? '<meta http-equiv="refresh" content="10">' : '' )
-			. '<title>Restore progress</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7f7;color:#1d2327;margin:0;padding:24px 16px}main{max-width:720px;margin:0 auto;background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px}pre{white-space:pre-wrap;word-break:break-word;background:#f6f7f7;padding:12px;font-size:12px;max-height:50vh;overflow:auto}.s{font-weight:600}</style></head><body><main>'
+			. '<title>Restore progress</title>';
+		self::print_page_styles();
+		echo '</head><body><main>'
 			. '<h1>Site restore</h1>'
-			. '<p class="s">' . esc_html( $labels[ $status ] ?? ucfirst( $status ) ) . '</p>'
+			. '<p class="digifix-tc-status">' . esc_html( $labels[ $status ] ?? ucfirst( $status ) ) . '</p>'
 			. '<p>' . esc_html( (string) ( $req['progress'] ?? '' ) ) . '</p>'
-			. ( ! empty( $req['error'] ) ? '<p style="color:#b32d2e">' . esc_html( (string) $req['error'] ) . '</p>' : '' )
+			. ( ! empty( $req['error'] ) ? '<p class="digifix-tc-error">' . esc_html( (string) $req['error'] ) . '</p>' : '' )
 			. '<pre>' . esc_html( implode( "\n", (array) ( $req['log'] ?? array() ) ) ) . '</pre>'
 			. ( $active ? '<p>This page refreshes every 10 seconds. You can close it; the restore continues on its own.</p>' : '<p><a href="' . esc_url( admin_url( 'admin.php?page=digifix-tc-backups' ) ) . '">Back to TotalCare</a></p>' )
 			. '</main></body></html>';

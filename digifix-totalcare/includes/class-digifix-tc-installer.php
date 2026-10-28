@@ -37,7 +37,7 @@ class Digifix_TC_Installer {
 		}
 		$source = DIGIFIX_TC_DIR . 'mu-plugin/' . self::GUARDIAN_FILE;
 		$mode   = self::guardian_mode();
-		$target = 'mu' === $mode ? self::mu_path() : ( 'dropin' === $mode ? self::dropin_guardian_path() : '' );
+		$target = 'mu' === $mode ? self::mu_path() : ( 'dropin' === $mode ? self::dropin_path() : '' );
 		if ( ! $target || ! file_exists( $target ) || md5_file( $target ) !== md5_file( $source ) ) {
 			self::install_guardian();
 		}
@@ -136,7 +136,8 @@ class Digifix_TC_Installer {
 		update_option( 'digifix_tc_db_version', DIGIFIX_TC_DB_VERSION, false );
 	}
 
-	const DROPIN_MARKER = 'DIGIFIX-TC-GUARDIAN-LOADER';
+	/** Text in the guardian's header that identifies our drop-in. */
+	const DROPIN_MARKER = 'Plugin Name: Digifix TotalCare Guardian';
 
 	public static function mu_path() {
 		return untrailingslashit( WPMU_PLUGIN_DIR ) . '/' . self::GUARDIAN_FILE;
@@ -144,10 +145,6 @@ class Digifix_TC_Installer {
 
 	public static function dropin_path() {
 		return WP_CONTENT_DIR . '/fatal-error-handler.php';
-	}
-
-	public static function dropin_guardian_path() {
-		return Digifix_TC_Storage::data_dir() . '/' . self::GUARDIAN_FILE;
 	}
 
 	private static function dropin_is_ours() {
@@ -211,28 +208,17 @@ class Digifix_TC_Installer {
 		return '';
 	}
 
+	/**
+	 * Install the guardian file itself as the fatal-error-handler.php drop-in.
+	 * WordPress includes it on every request; it returns nothing, so
+	 * WordPress keeps its default fatal error handler.
+	 */
 	private static function try_dropin( $source ) {
 		$dropin = self::dropin_path();
 		if ( file_exists( $dropin ) && ! self::dropin_is_ours() ) {
 			return $dropin . ' already exists and belongs to another plugin.';
 		}
-		if ( ! @copy( $source, self::dropin_guardian_path() ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			return 'could not copy the guardian to ' . self::dropin_guardian_path() . '.';
-		}
-		$loader = "<?php\n"
-			. "/**\n"
-			. " * Digifix TotalCare guardian loader (" . self::DROPIN_MARKER . ").\n"
-			. " *\n"
-			. " * WordPress fatal-error-handler drop-in, used because mu-plugins is not\n"
-			. " * writable on this host. Loads the TotalCare guardian on every request and\n"
-			. " * returns null so WordPress keeps its default fatal error handler.\n"
-			. " * Managed by Digifix TotalCare; removed when the plugin is deactivated.\n"
-			. " */\n"
-			. "if ( defined( 'ABSPATH' ) && ! defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) && is_readable( WP_CONTENT_DIR . '/digifix-tc-data/" . self::GUARDIAN_FILE . "' ) ) {\n"
-			. "\tinclude_once WP_CONTENT_DIR . '/digifix-tc-data/" . self::GUARDIAN_FILE . "';\n"
-			. "}\n"
-			. "return null;\n";
-		if ( false === @file_put_contents( $dropin, $loader ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! @copy( $source, $dropin ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			return 'could not write ' . $dropin . ' (wp-content is not writable).';
 		}
 		return '';
@@ -266,10 +252,8 @@ class Digifix_TC_Installer {
 	}
 
 	public static function remove_guardian() {
-		foreach ( array( self::mu_path(), self::dropin_guardian_path() ) as $file ) {
-			if ( file_exists( $file ) ) {
-				wp_delete_file( $file );
-			}
+		if ( file_exists( self::mu_path() ) ) {
+			wp_delete_file( self::mu_path() );
 		}
 		if ( self::dropin_is_ours() ) {
 			wp_delete_file( self::dropin_path() );
