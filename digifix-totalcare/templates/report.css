@@ -1,0 +1,24 @@
+/*
+ * Client care report (PDF via dompdf, or printable HTML).
+ * Keep CSS simple: dompdf supports CSS 2.1 and tables, not flexbox/grid.
+ * The brand colour rules are added at runtime (Digifix_TC_PDF::brand_css()).
+ */
+@page { margin: 28px 34px; }
+body { font-family: "DejaVu Sans", Helvetica, Arial, sans-serif; font-size: 11px; color: #1f2937; margin: 0; }
+.header { background: #0b5cab; color: #fff; padding: 18px 22px; }
+.header .small { font-size: 10px; opacity: .85; }
+.header h1 { font-size: 20px; margin: 4px 0 2px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #374151; border-bottom: 2px solid #0b5cab; padding-bottom: 4px; margin: 22px 0 8px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; background: #f3f4f6; color: #4b5563; font-weight: bold; padding: 6px; border-bottom: 1px solid #e5e7eb; }
+td { padding: 6px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+td.label { width: 40%; }
+.kpis td { width: 25%; text-align: center; border: 1px solid #e5e7eb; padding: 12px 6px; }
+.kpi-value { font-size: 22px; font-weight: bold; color: #0b5cab; }
+.kpi-label { font-size: 10px; color: #6b7280; text-transform: uppercase; }
+.ok { color: #1e7e34; font-weight: bold; }
+.bad { color: #b3261e; font-weight: bold; }
+.muted { color: #6b7280; }
+.footer { margin-top: 26px; font-size: 9px; color: #9ca3af; }
+.print-bar { text-align: center; margin: 20px; }
+@media print { .noprint { display: none; } }

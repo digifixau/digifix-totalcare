@@ -1,7 +1,7 @@
 <?php
 /**
  * Loads the backup engine. Used by TotalCare and, for restores, by the
- * guardian from its pinned copy in wp-content/digifix-tc-data/engine/<version>/.
+ * guardian before regular plugins load.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

@@ -33,9 +33,9 @@ $digifix_tc_default = ( new DateTimeImmutable( 'first day of last month', wp_tim
 					<option value="<?php echo esc_attr( $digifix_tc_key ); ?>" <?php selected( $digifix_tc_key, $digifix_tc_default ); ?>><?php echo esc_html( $digifix_tc_label ); ?></option>
 				<?php endforeach; ?>
 			</select>
-			<button class="button" name="mode" value="html" onclick="this.form.target='_blank'">View</button>
-			<button class="button button-primary" name="mode" value="pdf" onclick="this.form.target='_blank'"><?php echo Digifix_TC_PDF::available() ? 'Download PDF' : 'Printable version'; ?></button>
-			<button class="button" name="mode" value="email" onclick="this.form.target='_self'; return confirm('Email this report to the internal and client recipients?');">Email report</button>
+			<button class="button" name="mode" value="html" data-digifix-tc-target="_blank">View</button>
+			<button class="button button-primary" name="mode" value="pdf" data-digifix-tc-target="_blank"><?php echo Digifix_TC_PDF::available() ? 'Download PDF' : 'Printable version'; ?></button>
+			<button class="button" name="mode" value="email" data-digifix-tc-target="_self" data-digifix-tc-confirm="Email this report to the internal and client recipients?">Email report</button>
 		</form>
 		<?php if ( ! Digifix_TC_PDF::available() ) : ?>
 			<p class="description digifix-tc-mt">PDF files need dompdf. Run <code>composer install</code> in the plugin folder (or use a release build that includes <code>vendor/</code>). Until then, use the printable version and your browser's "Save as PDF".</p>

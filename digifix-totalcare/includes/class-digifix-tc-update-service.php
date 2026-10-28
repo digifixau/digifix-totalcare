@@ -617,11 +617,13 @@ class Digifix_TC_Update_Service {
 		return $best;
 	}
 
-	/** Read the version from disk since the running process has the old one loaded. */
+	/**
+	 * Read the version from disk since the running process has the old one
+	 * loaded. The file is parsed as text, not included.
+	 */
 	private function fresh_wp_version() {
-		$wp_version = '';
-		include ABSPATH . WPINC . '/version.php';
-		return $wp_version;
+		$source = (string) @file_get_contents( ABSPATH . WPINC . '/version.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		return preg_match( '/\$wp_version\s*=\s*[\'"]([^\'"]+)[\'"]\s*;/', $source, $m ) ? $m[1] : '';
 	}
 
 	/**

@@ -7,9 +7,10 @@
  * (digifix-tc-data/restore-request.json), hands it to the guardian, and reconciles
  * the result once TotalCare is running again.
  *
- * With TotalCare's engine the guardian loads a pinned copy of the engine
- * from digifix-tc-data/engine/<version>/, so a broken TotalCare update cannot break
- * a restore. With the legacy WPvivid engine it calls WPvivid's restore.
+ * With TotalCare's engine the guardian loads the engine from this plugin's
+ * own folder, which a restore never overwrites (background updates are held
+ * back while it runs). With the legacy WPvivid engine it calls WPvivid's
+ * restore.
  *
  * Also acts as the handler for manual "restore" jobs started from the admin.
  */
@@ -32,29 +33,6 @@ class Digifix_TC_Restore {
 	public static function in_progress() {
 		$req = self::request();
 		return $req && in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing', 'failing' ), true );
-	}
-
-	/** Copy the engine next to the guardian's data so it survives plugin changes. */
-	private static function pin_engine() {
-		$dir = Digifix_TC_Storage::data_dir() . '/engine/' . preg_replace( '/[^0-9A-Za-z.-]/', '', DIGIFIX_TC_VERSION );
-		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
-			return new WP_Error( 'digifix_tc_restore', 'Could not create ' . $dir . '.' );
-		}
-		foreach ( glob( DIGIFIX_TC_DIR . 'includes/backup/*.php' ) as $file ) {
-			$target = $dir . '/' . basename( $file );
-			if ( ! file_exists( $target ) || md5_file( $target ) !== md5_file( $file ) ) {
-				if ( ! @copy( $file, $target ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-					return new WP_Error( 'digifix_tc_restore', 'Could not copy the restore engine to ' . $dir . '.' );
-				}
-			}
-		}
-		// Older pinned versions are no longer needed.
-		foreach ( (array) glob( Digifix_TC_Storage::data_dir() . '/engine/*', GLOB_ONLYDIR ) as $old ) {
-			if ( $old !== $dir ) {
-				Digifix_TC_Bk_Util::rrmdir( $old );
-			}
-		}
-		return $dir;
 	}
 
 	/**
@@ -84,16 +62,14 @@ class Digifix_TC_Restore {
 				return $local;
 			}
 		} else {
-			$dir = self::pin_engine();
-			if ( is_wp_error( $dir ) ) {
-				return $dir;
+			if ( ! is_readable( DIGIFIX_TC_DIR . 'includes/backup/loader.php' ) ) {
+				return new WP_Error( 'digifix_tc_restore', 'The restore engine is missing from the plugin folder. Re-install TotalCare.' );
 			}
 			$scope = array_values( array_intersect( self::ALL_SCOPE, (array) ( $opts['scope'] ?? self::ALL_SCOPE ) ) );
 			if ( ! $scope ) {
 				return new WP_Error( 'digifix_tc_restore', 'Choose at least one part of the site to restore.' );
 			}
 			$extra = array(
-				'engine_dir'  => $dir,
 				'folder'      => $opts['folder'] ?? null,
 				'scope'       => $scope,
 				'paths'       => array_values( array_filter( array_map( 'trim', (array) ( $opts['paths'] ?? array() ) ) ) ),

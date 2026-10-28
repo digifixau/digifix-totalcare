@@ -230,12 +230,8 @@ class Digifix_TC_WPvivid {
 
 	/** Signed loopback that runs a WPvivid backup task (WPvivid ends the request). */
 	public static function ajax_run_task() {
-		$ts  = isset( $_POST['ts'] ) ? (int) $_POST['ts'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$sig = isset( $_POST['sig'] ) ? sanitize_text_field( wp_unslash( $_POST['sig'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		if ( ! Digifix_TC_Storage::verify( 'digifix_tc_run_wpvivid', $ts, $sig ) ) {
-			wp_send_json( array( 'ok' => false ), 403 );
-		}
-		self::run_task_if_ready( sanitize_key( wp_unslash( $_POST['task_id'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		Digifix_TC_Storage::verify_loopback( 'digifix_tc_run_wpvivid' );
+		self::run_task_if_ready( sanitize_key( wp_unslash( $_POST['task_id'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- signature checked by verify_loopback() above.
 		wp_send_json( array( 'ok' => true, 'started' => false ) );
 	}
 

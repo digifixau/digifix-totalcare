@@ -15,8 +15,26 @@ class Digifix_TC_PDF {
 		return class_exists( '\Dompdf\Dompdf' );
 	}
 
-	public static function render_html( array $report ) {
-		$brand = Digifix_TC_Settings::get( 'brand_color' );
+	/** Rules that use the brand colour chosen in the settings. */
+	private static function brand_css() {
+		$brand = sanitize_hex_color( (string) Digifix_TC_Settings::get( 'brand_color' ) );
+		if ( ! $brand ) {
+			return '';
+		}
+		return '.header{background:' . $brand . ';}h2{border-bottom-color:' . $brand . ';}.kpi-value{color:' . $brand . ';}';
+	}
+
+	/**
+	 * @param bool $browser True for the printable page shown in the browser:
+	 *                      the stylesheet and print button script are then
+	 *                      registered here and printed by the template.
+	 */
+	public static function render_html( array $report, $browser = false ) {
+		if ( $browser ) {
+			wp_register_style( 'digifix-tc-report', DIGIFIX_TC_URL . 'templates/report.css', array(), DIGIFIX_TC_VERSION );
+			wp_add_inline_style( 'digifix-tc-report', self::brand_css() );
+			Digifix_TC_Admin::register_script();
+		}
 		ob_start();
 		include DIGIFIX_TC_DIR . 'templates/report.php';
 		return (string) ob_get_clean();
@@ -37,6 +55,9 @@ class Digifix_TC_PDF {
 		$options->set( 'defaultFont', 'DejaVu Sans' );
 		$dompdf = new \Dompdf\Dompdf( $options );
 		$dompdf->loadHtml( self::render_html( $report ) );
+		// The same stylesheet as the printable page, read from the plugin folder.
+		$css = (string) file_get_contents( DIGIFIX_TC_DIR . 'templates/report.css' ) . self::brand_css(); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		$dompdf->getCss()->load_css( $css );
 		$dompdf->setPaper( 'A4', 'portrait' );
 		$dompdf->render();
 

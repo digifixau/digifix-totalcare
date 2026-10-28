@@ -43,7 +43,7 @@ A WordPress plugin, installed on each client site, that runs routine maintenance
    - creates the tables `wp_digifix_tc_jobs` and `wp_digifix_tc_events`;
    - creates `wp-content/digifix-tc-data/` and `wp-content/digifix-tc-rollback/`;
    - installs the guardian mu-plugin, `wp-content/mu-plugins/digifix-tc-guardian.php`.
-     If `mu-plugins` is read-only (on some Hostinger plans it links to a host-managed folder), the guardian is loaded instead through the WordPress drop-in `wp-content/fatal-error-handler.php`, from `wp-content/digifix-tc-data/digifix-tc-guardian.php`. If another plugin already uses that drop-in, the dashboard shows the guardian as missing.
+     If `mu-plugins` is read-only (on some Hostinger plans it links to a host-managed folder), the same guardian file is installed instead as the WordPress drop-in `wp-content/fatal-error-handler.php` (it returns nothing, so WordPress keeps its default fatal error handler). If another plugin already uses that drop-in, the dashboard shows the guardian as missing.
    - adds a `noabort` rule for LiteSpeed to `.htaccess` (only applies under LiteSpeed; see [Background requests](#background-requests)).
 4. Go to **TotalCare → Settings → Remote storage** and enter the bucket details. When you save, TotalCare tests upload, download, list, multipart upload and delete with a small file. The secret key is stored encrypted, with a key kept in `wp-content/digifix-tc-data/secret.php`. You can also define `DIGIFIX_TC_S3_SECRET` in `wp-config.php` instead.
 
@@ -129,7 +129,7 @@ A backup runs in this order: `preflight → database → files → finalize → 
   Every backup that a kept backup depends on is also kept. Incomplete backups older than two days and abandoned multipart uploads are removed.
 
 ### Restores
-Restores are driven by the guardian, before regular plugins and the theme load. A broken plugin can't stop a restore, and nothing needs to be deactivated. The guardian loads a copy of the restore engine pinned in `wp-content/digifix-tc-data/engine/<version>/`, so a broken TotalCare update can't stop one either.
+Restores are driven by the guardian, before regular plugins and the theme load. A broken plugin can't stop a restore, and nothing needs to be deactivated. The guardian loads the restore engine from TotalCare's own plugin folder, which a restore never overwrites, and background updates are held back until the restore is done.
 
 `preflight → plan → database import → files → clean → swap → finish`
 

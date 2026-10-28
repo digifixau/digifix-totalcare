@@ -1,5 +1,5 @@
 === Digifix TotalCare ===
-Contributors: digifix
+Contributors: digifixdev
 Tags: backup, restore, updates, maintenance, s3
 Requires at least: 6.2
 Tested up to: 7.1
@@ -57,7 +57,7 @@ So that you know exactly what changes on the server:
 
 * Two database tables, `{prefix}digifix_tc_jobs` and `{prefix}digifix_tc_events`, for the job queue and the activity log.
 * Two folders, `wp-content/digifix-tc-data/` (settings for the guardian, work files and an encryption key) and `wp-content/digifix-tc-rollback/` (copies of plugins and themes taken just before they are updated). Work files containing database data are kept in a folder with a random, unguessable name.
-* A small "guardian" must-use plugin, `wp-content/mu-plugins/digifix-tc-guardian.php`. It records PHP fatal errors, rolls back an update that crashes the site, and drives restores. Where `mu-plugins` is read-only, it is loaded through the `wp-content/fatal-error-handler.php` drop-in instead, unless another plugin already uses that drop-in.
+* A small "guardian" must-use plugin, `wp-content/mu-plugins/digifix-tc-guardian.php`. It records PHP fatal errors, rolls back an update that crashes the site, and drives restores. Where `mu-plugins` is read-only, the same file is installed as the `wp-content/fatal-error-handler.php` drop-in instead, unless another plugin already uses that drop-in. It does not replace WordPress's fatal error handler.
 * On Apache-compatible servers, a short rule in `.htaccess`, between `# BEGIN Digifix TotalCare` and `# END Digifix TotalCare` markers. It only takes effect on LiteSpeed servers, where it stops background requests to `admin-ajax.php` and `wp-cron.php` from being cut off.
 
 Deactivating the plugin removes the guardian and the `.htaccess` rule (unless a restore is still running). Deleting the plugin also removes its tables, options and folders. Backups in your storage are never deleted when you remove the plugin.
@@ -85,29 +85,40 @@ PDF reports use these libraries, installed unmodified with Composer (see `compos
 
 = External services =
 
-TotalCare connects to the services below. It sends no data anywhere else and has no tracking or telemetry.
+TotalCare is a backup tool: it stores your backups in cloud storage that you own, so it has to connect to that storage. It connects only to the services listed below, and only after you have configured them. It has no tracking or telemetry, and it never connects to a server run by Digifix.
 
-**Your S3-compatible storage (Amazon S3, Cloudflare R2 or another provider you choose)**
+**1. Amazon S3 (only if you choose Amazon S3 as your storage)**
 
-TotalCare's backups are stored in the bucket you enter under TotalCare → Settings → Remote storage. Nothing is sent until you enter these details.
+Amazon S3 is a cloud storage service run by Amazon Web Services. TotalCare uses it to store and read back your backups. You need your own AWS account and bucket.
 
-* What is sent: backup archives of your site, which contain the database and the site's files, plus small index and manifest files. They are sent with your access key, over HTTPS unless you enter an `http://` endpoint yourself.
-* When: when you save the storage settings (a small test file is uploaded and deleted), during each backup, when backups are listed or pruned by retention, and when you restore or verify a backup.
-* Amazon S3: [AWS Service Terms](https://aws.amazon.com/service-terms/), [AWS Privacy Notice](https://aws.amazon.com/privacy/).
-* Cloudflare R2: [Cloudflare Terms](https://www.cloudflare.com/website-terms/), [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/).
-* Other providers: the terms and privacy policy of the provider whose endpoint you enter.
+* Servers called: `https://s3.<region>.amazonaws.com/` or `https://<bucket>.s3.<region>.amazonaws.com/` (the region and bucket are the ones you enter), and once, `https://<bucket>.s3.amazonaws.com/` or `https://s3.amazonaws.com/<bucket>` to look up the bucket's region.
+* What is sent: your backup archives (the site's database and files), small index and manifest files, and your access key ID with a signature made from your secret key. The region lookup is one unsigned request that sends only the bucket name.
+* When: when you save the storage settings (a small test file is uploaded and deleted, and the region is looked up), during each backup, when backups are listed, pinned or deleted by retention, and when you restore or verify a backup.
+* Terms: [AWS Customer Agreement](https://aws.amazon.com/agreement/), [AWS Service Terms](https://aws.amazon.com/service-terms/). Privacy: [AWS Privacy Notice](https://aws.amazon.com/privacy/).
 
-**Amazon S3 region lookup**
+**2. Cloudflare R2 (only if you choose Cloudflare R2 as your storage)**
 
-When you save the settings with Amazon S3 selected, TotalCare sends one unsigned request to `https://<bucket>.s3.amazonaws.com/` to find the bucket's region. Only the bucket name is sent. [AWS Service Terms](https://aws.amazon.com/service-terms/), [AWS Privacy Notice](https://aws.amazon.com/privacy/).
+Cloudflare R2 is a cloud storage service run by Cloudflare. TotalCare uses it to store and read back your backups. You need your own Cloudflare account and bucket.
 
-**Webhook (optional)**
+* Server called: `https://<account-id>.r2.cloudflarestorage.com/` (the account ID you enter).
+* What is sent and when: the same as for Amazon S3 above (without the region lookup).
+* Terms: [Cloudflare Self-Serve Subscription Agreement](https://www.cloudflare.com/terms/), [Cloudflare Website and Online Services Terms of Use](https://www.cloudflare.com/website-terms/). Privacy: [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/).
 
-If you enter a webhook URL under TotalCare → Settings, TotalCare sends a JSON message to that URL whenever a backup, update run, restore or scan finishes or fails, and for the monthly report. The message contains the site name and URL, the client name you entered, the event, and its details, such as which plugins were updated or how many scan issues were found. It is signed with your webhook secret. Nothing is sent if the field is empty. The terms and privacy policy of the service behind the URL you enter apply.
+**3. Another S3-compatible storage provider (only if you choose "Other S3-compatible")**
 
-**Your own site**
+For providers such as Wasabi, DigitalOcean Spaces or Backblaze B2, or your own MinIO server, TotalCare connects only to the endpoint address you enter. What is sent and when is the same as for Amazon S3 above (without the region lookup). The provider's own terms of service and privacy policy apply; you can find them on the provider's website.
 
-TotalCare sends requests to your own site to run background work, health checks after updates and restore steps. These requests only go to your own site's address. Emails are sent through WordPress's `wp_mail()`, using whatever mail setup your site already has.
+**4. Webhook (optional, off by default)**
+
+If you enter a webhook URL under TotalCare → Settings, TotalCare sends a JSON message to that URL (for example a Slack incoming webhook or your own n8n server).
+
+* What is sent: the site name and URL, the client name you entered, the event (backup, update run, restore or scan finished or failed, or the monthly report) and its details, such as which plugins were updated or how many scan issues were found. The message is signed with your webhook secret.
+* When: each time one of those events happens. Nothing is sent while the field is empty.
+* The terms of service and privacy policy of the service behind the URL you enter apply. For Slack: [Slack Terms of Service](https://slack.com/terms-of-service), [Slack Privacy Policy](https://slack.com/trust/privacy/privacy-policy).
+
+**Requests to your own site**
+
+TotalCare sends requests to your own site's `admin-ajax.php` to run background work, check the site's health after updates and continue restores. These requests stay on your own server and are signed with a secret key stored on it. Emails are sent through WordPress's `wp_mail()`, using whatever mail setup your site already has.
 
 == Installation ==
 

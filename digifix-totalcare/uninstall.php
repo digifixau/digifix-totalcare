@@ -36,7 +36,7 @@ if ( file_exists( $digifix_tc_guardian ) ) {
 	wp_delete_file( $digifix_tc_guardian );
 }
 $digifix_tc_dropin = WP_CONTENT_DIR . '/fatal-error-handler.php';
-if ( file_exists( $digifix_tc_dropin ) && false !== strpos( (string) file_get_contents( $digifix_tc_dropin ), 'DIGIFIX-TC-GUARDIAN-LOADER' ) ) {
+if ( file_exists( $digifix_tc_dropin ) && false !== strpos( (string) file_get_contents( $digifix_tc_dropin ), 'Plugin Name: Digifix TotalCare Guardian' ) ) {
 	wp_delete_file( $digifix_tc_dropin );
 }
 
