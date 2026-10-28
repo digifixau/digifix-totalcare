@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Digifix TotalCare Guardian
  * Description: Safety net for Digifix TotalCare. Records PHP fatal errors, rolls back a plugin/theme update that crashes the site, and drives site restores before other plugins load. Installed and removed automatically by Digifix TotalCare.
- * Version:     1.2.0
+ * Version:     1.2.1
  * Author:      Digifix
  *
  * This file must stay self-contained: it runs when a broken plugin crashes
@@ -24,7 +24,7 @@ if ( defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) ) {
 	return;
 }
 
-define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.0' );
+define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.1' );
 
 final class Digifix_TC_Guardian {
 

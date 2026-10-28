@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Digifix TotalCare
  * Description:       Automated site care: incremental backups to S3 or Cloudflare R2 with one-click restore, weekly safe updates with health checks and automatic rollback, scheduled Wordfence scans and client reporting.
- * Version:           1.2.0
+ * Version:           1.2.1
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            Digifix
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'DIGIFIX_TC_VERSION', '1.2.0' );
+define( 'DIGIFIX_TC_VERSION', '1.2.1' );
 define( 'DIGIFIX_TC_DB_VERSION', '1' );
 define( 'DIGIFIX_TC_FILE', __FILE__ );
 define( 'DIGIFIX_TC_DIR', plugin_dir_path( __FILE__ ) );

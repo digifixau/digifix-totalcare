@@ -4,7 +4,7 @@ Tags: backup, restore, updates, maintenance, s3
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -168,6 +168,15 @@ No. The backup warns you when it finds any. Empty folders aren't backed up eithe
 
 == Changelog ==
 
+= 1.2.1 =
+* Styles and scripts are now loaded through the WordPress enqueue APIs (maintenance and restore pages, printable report).
+* The restore engine runs from the plugin folder; no PHP code is copied into wp-content any more.
+* When mu-plugins is read-only, the guardian file itself is used as the fatal-error-handler.php drop-in.
+* Restores no longer follow symbolic links outside the site.
+* TotalCare cannot be updated while a restore is running.
+* The admin menu now uses the default position.
+* The external services section lists every server the plugin contacts.
+
 = 1.2.0 =
 * First release on WordPress.org. Updates now come from WordPress.org; the GitHub updater has been removed.
 * Option, table, hook and file names now use the `digifix_tc` prefix.
@@ -181,6 +190,9 @@ No. The backup warns you when it finds any. Empty folders aren't backed up eithe
 * Safe updates with health checks and automatic rollback, Wordfence scan scheduling, email and webhook reports, and monthly PDF reports.
 
 == Upgrade Notice ==
+
+= 1.2.1 =
+Changes requested in the WordPress.org review: assets use the enqueue APIs, no code is copied into wp-content and restores are safer.
 
 = 1.2.0 =
 First WordPress.org release. Settings and history saved by earlier test builds are not carried over: enter your storage details again after installing.
