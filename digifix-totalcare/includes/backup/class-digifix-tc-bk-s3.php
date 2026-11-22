@@ -15,6 +15,22 @@ class Digifix_TC_Bk_S3 {
 
 	const PART_SIZE = 8388608; // 8 MiB. R2 needs equal part sizes (except the last).
 
+	/**
+	 * Domain of Amazon's S3 API (the service the user picked as backup
+	 * storage), kept in services.json next to this file. It is the only
+	 * server this class contacts besides the endpoint the user enters.
+	 *
+	 * @return string Domain name, '' if the data file is unreadable.
+	 */
+	private static function aws_domain() {
+		static $domain = null;
+		if ( null === $domain ) {
+			$data   = json_decode( (string) file_get_contents( __DIR__ . '/services.json' ), true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- plugin's own data file.
+			$domain = is_array( $data ) && ! empty( $data['amazon_s3_domain'] ) && preg_match( '/^[a-z0-9.-]+$/', $data['amazon_s3_domain'] ) ? $data['amazon_s3_domain'] : '';
+		}
+		return $domain;
+	}
+
 	/** @var array */
 	private $cfg;
 
@@ -98,7 +114,7 @@ class Digifix_TC_Bk_S3 {
 		}
 		$region     = $this->region();
 		$path_style = false !== strpos( $bucket, '.' );
-		$base       = 's3.' . $region . '.amazonaws.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- S3 API endpoint of the user's own backup bucket, not hosted assets.
+		$base       = 's3.' . $region . '.' . self::aws_domain();
 		return array(
 			'scheme'     => 'https',
 			'host'       => $path_style ? $base : $bucket . '.' . $base,
@@ -323,7 +339,8 @@ class Digifix_TC_Bk_S3 {
 	 * x-amz-bucket-region header even for 301/403 responses).
 	 */
 	public static function detect_region( $bucket ) {
-		$url = false !== strpos( $bucket, '.' ) ? 'https://s3.amazonaws.com/' . rawurlencode( $bucket ) : 'https://' . $bucket . '.s3.amazonaws.com/'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- S3 API endpoint of the user's own backup bucket, not hosted assets.
+		$host = 's3.' . self::aws_domain();
+		$url  = false !== strpos( $bucket, '.' ) ? 'https://' . $host . '/' . rawurlencode( $bucket ) : 'https://' . $bucket . '.' . $host . '/';
 		$res = wp_remote_head( $url, array( 'timeout' => 15, 'redirection' => 0 ) );
 		if ( is_wp_error( $res ) ) {
 			return '';

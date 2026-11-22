@@ -160,8 +160,8 @@ class Digifix_TC_Bk_Restore_Engine {
 		$to   = array(
 			'home'        => get_option( 'home' ),
 			'siteurl'     => get_option( 'siteurl' ),
-			'abspath'     => ABSPATH,
-			'content_dir' => WP_CONTENT_DIR,
+			'abspath'     => trailingslashit( Digifix_TC_Bk_Areas::roots()['core'] ),
+			'content_dir' => Digifix_TC_Bk_Areas::roots()['content'],
 		);
 		$map  = Digifix_TC_Bk_Replace::pairs( $from, $to );
 
@@ -208,6 +208,12 @@ class Digifix_TC_Bk_Restore_Engine {
 					return true;
 				}
 				if ( ! $this->e['same'] && ( in_array( $path, array( 'object-cache.php', 'advanced-cache.php', 'db.php' ), true ) || 'wflogs' === $first ) ) {
+					return true;
+				}
+				break;
+			case 'uploads':
+				// TotalCare's own state: restoring it would rewind a running restore.
+				if ( in_array( $first, array( 'digifix-tc-data', 'digifix-tc-rollback' ), true ) ) {
 					return true;
 				}
 				break;

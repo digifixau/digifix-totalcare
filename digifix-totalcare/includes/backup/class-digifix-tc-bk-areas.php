@@ -94,9 +94,16 @@ class Digifix_TC_Bk_Areas {
 
 	/** Physical folders never backed up or restored. */
 	public static function protected_dirs() {
-		return array(
-			untrailingslashit( WP_CONTENT_DIR ) . '/digifix-tc-data',
-			untrailingslashit( WP_CONTENT_DIR ) . '/digifix-tc-rollback',
+		return array_values(
+			array_filter(
+				array(
+					Digifix_TC_Bk_Util::data_dir(),
+					Digifix_TC_Bk_Util::rollback_dir(),
+					// Folders used up to 1.2.1, until the plugin has moved them.
+					Digifix_TC_Bk_Util::legacy_dir( 'digifix-tc-data' ),
+					Digifix_TC_Bk_Util::legacy_dir( 'digifix-tc-rollback' ),
+				)
+			)
 		);
 	}
 

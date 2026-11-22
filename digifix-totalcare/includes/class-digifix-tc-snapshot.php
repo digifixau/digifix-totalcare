@@ -4,7 +4,7 @@
  * rollback without restoring the full WPvivid backup.
  *
  * Before each item is updated an "in-flight" marker is written to
- * digifix-tc-data/inflight.json. If the new code fatals on every request (so the job
+ * digifix-tc-data/inflight.json (in the uploads folder). If the new code fatals on every request (so the job
  * engine never runs again) the guardian mu-plugin uses this marker to swap the
  * snapshot back in from WordPress's fatal error handler.
  */
@@ -23,8 +23,9 @@ class Digifix_TC_Snapshot {
 		if ( 'theme' === $kind ) {
 			return get_theme_root( $id ) . '/' . $id;
 		}
-		$dir = dirname( $id );
-		return '.' === $dir ? WP_PLUGIN_DIR . '/' . $id : WP_PLUGIN_DIR . '/' . $dir;
+		$dir     = dirname( $id );
+		$plugins = Digifix_TC_Bk_Areas::roots()['plugins'];
+		return '.' === $dir ? $plugins . '/' . $id : $plugins . '/' . $dir;
 	}
 
 	/**
@@ -101,17 +102,23 @@ class Digifix_TC_Snapshot {
 	}
 
 	public static function cleanup( $keep_days ) {
-		$root = Digifix_TC_Storage::rollback_dir();
-		if ( ! is_dir( $root ) ) {
-			return;
-		}
 		$active_job = self::get_inflight();
-		foreach ( glob( $root . '/*', GLOB_ONLYDIR ) ?: array() as $dir ) {
-			if ( $active_job && (int) basename( $dir ) === (int) $active_job['job_id'] ) {
+		// Copies taken before 1.2.2 are in wp-content; they age out like the rest.
+		$legacy = Digifix_TC_Bk_Util::legacy_dir( 'digifix-tc-rollback' );
+		foreach ( array_filter( array( Digifix_TC_Storage::rollback_dir(), $legacy ) ) as $root ) {
+			if ( ! is_dir( $root ) ) {
 				continue;
 			}
-			if ( filemtime( $dir ) < time() - $keep_days * DAY_IN_SECONDS ) {
-				self::rrmdir( $dir );
+			foreach ( glob( $root . '/*', GLOB_ONLYDIR ) ?: array() as $dir ) {
+				if ( $active_job && (int) basename( $dir ) === (int) $active_job['job_id'] ) {
+					continue;
+				}
+				if ( filemtime( $dir ) < time() - $keep_days * DAY_IN_SECONDS ) {
+					self::rrmdir( $dir );
+				}
+			}
+			if ( $root === $legacy && ! glob( $root . '/*', GLOB_ONLYDIR ) ) {
+				self::rrmdir( $root );
 			}
 		}
 	}

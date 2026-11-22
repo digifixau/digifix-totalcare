@@ -25,7 +25,8 @@ foreach ( array( 'digifix_tc_settings', 'digifix_tc_db_version', 'digifix_tc_las
 }
 
 // LiteSpeed noabort rule added by the installer.
-$digifix_tc_htaccess = ABSPATH . '.htaccess';
+require_once ABSPATH . 'wp-admin/includes/file.php';
+$digifix_tc_htaccess = get_home_path() . '.htaccess';
 if ( file_exists( $digifix_tc_htaccess ) && is_writable( $digifix_tc_htaccess ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 	require_once ABSPATH . 'wp-admin/includes/misc.php';
 	insert_with_markers( $digifix_tc_htaccess, 'Digifix TotalCare', array() );
@@ -40,7 +41,22 @@ if ( file_exists( $digifix_tc_dropin ) && false !== strpos( (string) file_get_co
 	wp_delete_file( $digifix_tc_dropin );
 }
 
-foreach ( array( WP_CONTENT_DIR . '/digifix-tc-data', WP_CONTENT_DIR . '/digifix-tc-rollback' ) as $digifix_tc_dir ) {
+// The folders are in the uploads folder (the main site's, on multisite); the
+// plugin's classes are not loaded here, so the location is worked out again.
+$digifix_tc_switched = is_multisite() ? switch_to_blog( get_main_site_id() ) : false;
+$digifix_tc_uploads  = wp_upload_dir( null, false );
+if ( $digifix_tc_switched ) {
+	restore_current_blog();
+}
+$digifix_tc_folders = array();
+foreach ( array( 'digifix-tc-data', 'digifix-tc-rollback' ) as $digifix_tc_name ) {
+	if ( ! empty( $digifix_tc_uploads['basedir'] ) ) {
+		$digifix_tc_folders[] = untrailingslashit( $digifix_tc_uploads['basedir'] ) . '/' . $digifix_tc_name;
+	}
+	// Folders used up to version 1.2.1.
+	$digifix_tc_folders[] = untrailingslashit( WP_CONTENT_DIR ) . '/' . $digifix_tc_name;
+}
+foreach ( $digifix_tc_folders as $digifix_tc_dir ) {
 	if ( ! is_dir( $digifix_tc_dir ) ) {
 		continue;
 	}

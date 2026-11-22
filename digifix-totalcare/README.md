@@ -41,11 +41,11 @@ A WordPress plugin, installed on each client site, that runs routine maintenance
 2. Optional, for PDF reports: run `composer install --no-dev` in the plugin folder. The release zip already includes `vendor/`.
 3. Activate the plugin. Activation:
    - creates the tables `wp_digifix_tc_jobs` and `wp_digifix_tc_events`;
-   - creates `wp-content/digifix-tc-data/` and `wp-content/digifix-tc-rollback/`;
+   - creates `uploads/digifix-tc-data/` and `uploads/digifix-tc-rollback/` (in the uploads folder);
    - installs the guardian mu-plugin, `wp-content/mu-plugins/digifix-tc-guardian.php`.
      If `mu-plugins` is read-only (on some Hostinger plans it links to a host-managed folder), the same guardian file is installed instead as the WordPress drop-in `wp-content/fatal-error-handler.php` (it returns nothing, so WordPress keeps its default fatal error handler). If another plugin already uses that drop-in, the dashboard shows the guardian as missing.
    - adds a `noabort` rule for LiteSpeed to `.htaccess` (only applies under LiteSpeed; see [Background requests](#background-requests)).
-4. Go to **TotalCare → Settings → Remote storage** and enter the bucket details. When you save, TotalCare tests upload, download, list, multipart upload and delete with a small file. The secret key is stored encrypted, with a key kept in `wp-content/digifix-tc-data/secret.php`. You can also define `DIGIFIX_TC_S3_SECRET` in `wp-config.php` instead.
+4. Go to **TotalCare → Settings → Remote storage** and enter the bucket details. When you save, TotalCare tests upload, download, list, multipart upload and delete with a small file. The secret key is stored encrypted, with a key kept in `uploads/digifix-tc-data/secret.php`. You can also define `DIGIFIX_TC_S3_SECRET` in `wp-config.php` instead.
 
 ## Releasing an update
 
@@ -117,7 +117,7 @@ A backup runs in this order: `preflight → database → files → finalize → 
   - **Disk:** about 16 MB of spool space. Archive data is uploaded in 8 MiB parts as soon as each part is full, and no local copy of the backup is kept.
   - **CPU:** media and other already-compressed formats are stored without recompressing. Text and SQL use fast compression (level 3). Database tables are read page by page on their key, without OFFSET.
 - **Database:** every table with the site's prefix, except TotalCare's own (`digifix_tc_jobs`, `digifix_tc_events`) and transients. Views, triggers and stored routines are not backed up; the backup warns when it finds any.
-- **Default exclusions** (editable): cache folders, other backup plugins' folders, `node_modules`, `.git`, logs. `wp-content/digifix-tc-data` and `digifix-tc-rollback` are never backed up.
+- **Default exclusions** (editable): cache folders, other backup plugins' folders, `node_modules`, `.git`, logs. `uploads/digifix-tc-data` and `digifix-tc-rollback` are never backed up.
 - **Folder ownership.** `site.json` records the home URL. A site whose address doesn't match refuses to write or prune in that folder, so a staging copy can't overwrite or delete the live site's backups. Use **Backups → Take over this folder** after a real domain change.
 - **Retention** runs after each backup and once a day. It keeps:
   - the newest *N* backups;
@@ -155,7 +155,7 @@ The steps run in this order:
 
 `preflight → backup (incremental, to remote storage) → baseline health check → for each item: snapshot → update → health check → (rollback if needed) → core → final check → report`
 
-- **Snapshots.** Before each item is updated, its folder is copied to `wp-content/digifix-tc-rollback/<job>/`.
+- **Snapshots.** Before each item is updated, its folder is copied to `uploads/digifix-tc-rollback/<job>/`.
 - **Blocked versions.** A version that broke the site isn't installed again until a newer release comes out. Clear this list from the dashboard.
 - **Health checks.** Each check is a separate HTTP request to the home page, the login page and any extra URLs you add.
   - **Hard failures** cause a rollback: a status of 500 or higher, a page that was 200 now returning an error, PHP fatal or parse errors, the WordPress "critical error" screen, a database connection error, truncated output, or a PHP fatal recorded by the guardian.
@@ -166,7 +166,7 @@ The steps run in this order:
 - Records PHP fatal errors.
 - If a fatal happens while an update is in progress, it swaps the snapshot back right away, so the site recovers even if no request can finish.
 - Drives restores before other plugins load, serves the maintenance page during a restore, and restarts a stalled restore (see [Restores](#restores)).
-- State is kept in `wp-content/digifix-tc-data/`, not in the database, so it survives the restore.
+- State is kept in `uploads/digifix-tc-data/`, not in the database, so it survives the restore.
 - TotalCare's own tables are excluded from backups, so a restore doesn't rewind the job or the log.
 
 ## Webhook format

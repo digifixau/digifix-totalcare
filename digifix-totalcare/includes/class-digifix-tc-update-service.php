@@ -81,7 +81,7 @@ class Digifix_TC_Update_Service {
 		if ( ! wp_is_file_mod_allowed( 'automatic_updater' ) ) {
 			$problems[] = 'File modifications are disabled (DISALLOW_FILE_MODS).';
 		}
-		$free = function_exists( 'disk_free_space' ) ? @disk_free_space( WP_CONTENT_DIR ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$free = function_exists( 'disk_free_space' ) ? @disk_free_space( Digifix_TC_Storage::data_dir() ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( false !== $free && $free < apply_filters( 'digifix_tc_min_free_disk', 500 * MB_IN_BYTES ) ) {
 			$problems[] = 'Less than ' . size_format( apply_filters( 'digifix_tc_min_free_disk', 500 * MB_IN_BYTES ) ) . ' of free disk space.';
 		}
@@ -350,6 +350,10 @@ class Digifix_TC_Update_Service {
 			$queue[ $idx ]['reason'] = is_wp_error( $result ) ? $result->get_error_message() : 'Core upgrader returned no result.';
 			$job->set( 'queue', $queue );
 			Digifix_TC_Logger::log( 'update', 'warning', 'update.item_failed', 'WordPress core update failed: ' . $queue[ $idx ]['reason'], self::public_item( $queue[ $idx ] ), $job->id );
+		} else {
+			// On success Core_Upgrader returns the version now installed.
+			$queue[ $idx ]['installed'] = is_string( $result ) ? $result : '';
+			$job->set( 'queue', $queue );
 		}
 		$job->go( 'core_check', 10, 'Checking site after core update.' );
 	}
@@ -361,7 +365,7 @@ class Digifix_TC_Update_Service {
 
 		if ( 'updating' === $queue[ $idx ]['status'] ) {
 			$queue[ $idx ]['status']   = $check['passed'] ? 'updated' : 'rolled_back';
-			$queue[ $idx ]['to']       = $this->fresh_wp_version() ?: $queue[ $idx ]['to'];
+			$queue[ $idx ]['to']       = ! empty( $queue[ $idx ]['installed'] ) ? $queue[ $idx ]['installed'] : $queue[ $idx ]['to'];
 			$queue[ $idx ]['warnings'] = $check['soft'];
 			$job->set( 'queue', $queue );
 		}
@@ -618,15 +622,6 @@ class Digifix_TC_Update_Service {
 	}
 
 	/**
-	 * Read the version from disk since the running process has the old one
-	 * loaded. The file is parsed as text, not included.
-	 */
-	private function fresh_wp_version() {
-		$source = (string) @file_get_contents( ABSPATH . WPINC . '/version.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-		return preg_match( '/\$wp_version\s*=\s*[\'"]([^\'"]+)[\'"]\s*;/', $source, $m ) ? $m[1] : '';
-	}
-
-	/**
 	 * @return true|WP_Error
 	 */
 	private function upgrade_item( array $item ) {
@@ -681,7 +676,7 @@ class Digifix_TC_Update_Service {
 			return;
 		}
 		$active = (array) get_option( 'active_plugins', array() );
-		if ( ! in_array( $item['id'], $active, true ) && file_exists( WP_PLUGIN_DIR . '/' . $item['id'] ) ) {
+		if ( ! in_array( $item['id'], $active, true ) && 0 === validate_plugin( $item['id'] ) ) {
 			$active[] = $item['id'];
 			sort( $active );
 			update_option( 'active_plugins', $active );
@@ -691,12 +686,8 @@ class Digifix_TC_Update_Service {
 	private function installed_version( array $item ) {
 		if ( 'plugin' === $item['kind'] ) {
 			wp_clean_plugins_cache( false );
-			$file = WP_PLUGIN_DIR . '/' . $item['id'];
-			if ( file_exists( $file ) ) {
-				$data = get_plugin_data( $file, false, false );
-				return $data['Version'] ?? '';
-			}
-			return '';
+			$plugins = get_plugins();
+			return $plugins[ $item['id'] ]['Version'] ?? '';
 		}
 		$theme = wp_get_theme( $item['id'] );
 		$theme->cache_delete();

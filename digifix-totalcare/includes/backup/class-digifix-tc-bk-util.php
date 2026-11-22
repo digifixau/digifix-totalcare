@@ -20,8 +20,65 @@ class Digifix_TC_Bk_Util {
 	 * Paths and local work files
 	 * ------------------------------------------------------------------ */
 
+	/**
+	 * Base of the uploads folder, found the same way as the guardian does
+	 * (Digifix_TC_Guardian::uploads_base(); keep the two in step). On
+	 * multisite the main site's uploads folder is used for every site.
+	 *
+	 * @return string '' while WordPress is not ready.
+	 */
+	public static function uploads_base() {
+		static $base = null;
+		if ( null !== $base ) {
+			return $base;
+		}
+		if ( ! function_exists( 'wp_upload_dir' ) ) {
+			return '';
+		}
+		$switched = is_multisite() ? switch_to_blog( get_main_site_id() ) : false;
+		$upload   = wp_upload_dir( null, false );
+		if ( $switched ) {
+			restore_current_blog();
+		}
+		$dir = ! empty( $upload['basedir'] ) ? untrailingslashit( $upload['basedir'] ) : '';
+		if ( '' !== $dir ) {
+			$base = $dir;
+		}
+		return $dir;
+	}
+
+	/** Folder used up to 1.2.1, inside wp-content. */
+	public static function legacy_dir( $name ) {
+		$roots = Digifix_TC_Bk_Areas::roots();
+		return '' === $roots['content'] ? '' : $roots['content'] . '/' . $name;
+	}
+
+	/**
+	 * Folder for TotalCare's state files: the uploads folder, or the old
+	 * folder in wp-content until Digifix_TC_Storage::migrate() has moved it.
+	 * The guardian decides when it is loaded, so both always agree.
+	 */
 	public static function data_dir() {
-		return WP_CONTENT_DIR . '/digifix-tc-data';
+		// An older guardian (still loaded in the request that updates the
+		// plugin) has no data_dir(); it reads the old folder, as resolve() does.
+		$dir = is_callable( array( 'Digifix_TC_Guardian', 'data_dir' ) ) ? Digifix_TC_Guardian::data_dir() : '';
+		return '' !== $dir ? $dir : self::resolve( 'digifix-tc-data' );
+	}
+
+	/** Folder for the copies taken before plugin and theme updates. */
+	public static function rollback_dir() {
+		return self::resolve( 'digifix-tc-rollback' );
+	}
+
+	/** @return string Absolute path, '' while WordPress is not ready. */
+	private static function resolve( $name ) {
+		$base = self::uploads_base();
+		if ( '' === $base ) {
+			return '';
+		}
+		$dir    = $base . '/' . $name;
+		$legacy = 'digifix-tc-data' === $name ? self::legacy_dir( $name ) : '';
+		return ! is_dir( $dir ) && '' !== $legacy && is_dir( $legacy ) ? $legacy : $dir;
 	}
 
 	/**
@@ -30,6 +87,9 @@ class Digifix_TC_Bk_Util {
 	 */
 	public static function work_dir() {
 		$base = self::data_dir();
+		if ( '' === $base ) {
+			throw new Digifix_TC_Bk_Exception( 'The uploads folder is not available.' );
+		}
 		$file = $base . '/work-dir.txt';
 		$name = file_exists( $file ) ? trim( (string) file_get_contents( $file ) ) : '';
 		if ( ! preg_match( '/^bk-[a-f0-9]{24}$/', $name ) ) {
@@ -232,8 +292,9 @@ class Digifix_TC_Bk_Util {
 		if ( ! file_exists( $file ) ) {
 			return null;
 		}
-		$secret = include $file;
-		return is_string( $secret ) && strlen( $secret ) >= 32 ? $secret : null;
+		// Read as text, never executed: the file sits in the uploads folder.
+		$source = (string) file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		return preg_match( "/return '([A-Za-z0-9]{32,})';/", $source, $m ) ? $m[1] : null;
 	}
 
 	private static function cipher_key() {
@@ -243,7 +304,7 @@ class Digifix_TC_Bk_Util {
 
 	/**
 	 * Encrypt the S3 secret for storage in the database. The key lives in
-	 * digifix-tc-data/secret.php, so a leaked database dump or export does not
+	 * digifix-tc-data/secret.php (in the uploads folder), so a leaked database dump or export does not
 	 * expose the bucket credentials (a compromised server still would).
 	 */
 	public static function encrypt( $plain ) {
