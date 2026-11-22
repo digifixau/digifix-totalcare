@@ -171,7 +171,6 @@ No. The backup warns you when it finds any. Empty folders aren't backed up eithe
 = 1.2.2 =
 * The data and rollback folders are now in the uploads folder instead of wp-content. Existing sites are moved automatically.
 * The encryption key file is only ever read as text, never run as PHP.
-* The restore engine path stored with a restore is signed, and the guardian only loads a signed path.
 * Recorded fatal-error addresses are sanitised.
 * Plugin and WordPress versions are read with WordPress functions instead of file paths.
 * The LiteSpeed rule also matches WordPress installed in a sub-folder.

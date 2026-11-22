@@ -69,18 +69,14 @@ class Digifix_TC_Restore {
 			if ( ! $scope ) {
 				return new WP_Error( 'digifix_tc_restore', 'Choose at least one part of the site to restore.' );
 			}
-			// The guardian loads the engine from this path only if the signature matches.
-			$loader = wp_normalize_path( DIGIFIX_TC_DIR . 'includes/backup/loader.php' );
-			$extra  = array(
-				'engine_loader' => $loader,
-				'engine_sig'    => hash_hmac( 'sha256', 'engine_loader|' . $loader, Digifix_TC_Storage::secret() ),
-				'folder'        => $opts['folder'] ?? null,
-				'scope'         => $scope,
-				'paths'         => array_values( array_filter( array_map( 'trim', (array) ( $opts['paths'] ?? array() ) ) ) ),
-				'clean'         => ! empty( $opts['clean'] ),
-				'htaccess'      => ! empty( $opts['htaccess'] ),
-				'token'         => bin2hex( random_bytes( 16 ) ),
-				'maintenance'   => false,
+			$extra = array(
+				'folder'      => $opts['folder'] ?? null,
+				'scope'       => $scope,
+				'paths'       => array_values( array_filter( array_map( 'trim', (array) ( $opts['paths'] ?? array() ) ) ) ),
+				'clean'       => ! empty( $opts['clean'] ),
+				'htaccess'    => ! empty( $opts['htaccess'] ),
+				'token'       => bin2hex( random_bytes( 16 ) ),
+				'maintenance' => false,
 			);
 		}
 

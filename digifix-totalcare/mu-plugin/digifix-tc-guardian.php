@@ -551,21 +551,18 @@ final class Digifix_TC_Guardian {
 	}
 
 	/**
-	 * The restore engine lives in TotalCare's own plugin folder. The plugin
-	 * stores its path (worked out from the plugin's own file location) in the
-	 * restore request together with an HMAC signature made with the site
-	 * secret, so a file written into the state folder by anything else is never
-	 * loaded. Only a file named includes/backup/loader.php is accepted.
-	 *
-	 * @return string '' when the path is missing or not signed.
+	 * The restore engine lives in TotalCare's own plugin folder. Only the
+	 * folder name comes from the restore request; the plugins directory is
+	 * fixed by WordPress, so a request file written into the state folder
+	 * can never make the guardian load code from anywhere else.
 	 */
 	private static function engine_loader( array $req ) {
-		$loader = str_replace( '\\', '/', (string) ( $req['engine_loader'] ?? '' ) );
-		$secret = self::secret();
-		if ( ! $secret || '/includes/backup/loader.php' !== substr( $loader, -27 ) ) {
+		$basename = str_replace( '\\', '/', (string) ( $req['plugin_basename'] ?? '' ) );
+		$folder   = false !== strpos( $basename, '/' ) ? substr( $basename, 0, strpos( $basename, '/' ) ) : '';
+		if ( '' === $folder || '.' === $folder || '..' === $folder ) {
 			return '';
 		}
-		return hash_equals( hash_hmac( 'sha256', 'engine_loader|' . $loader, $secret ), (string) ( $req['engine_sig'] ?? '' ) ) ? $loader : '';
+		return WP_PLUGIN_DIR . '/' . $folder . '/includes/backup/loader.php';
 	}
 
 	private static function json( array $data, $code = 200 ) {
