@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Digifix TotalCare Guardian
  * Description: Safety net for Digifix TotalCare. Records PHP fatal errors, rolls back a plugin/theme update that crashes the site, and drives site restores before other plugins load. Installed and removed automatically by Digifix TotalCare.
- * Version:     1.2.1
+ * Version:     1.2.2
  * Author:      Digifix
  *
  * This file must stay self-contained: it runs when a broken plugin crashes
@@ -24,7 +24,7 @@ if ( defined( 'DIGIFIX_TC_GUARDIAN_VERSION' ) ) {
 	return;
 }
 
-define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.1' );
+define( 'DIGIFIX_TC_GUARDIAN_VERSION', '1.2.2' );
 
 final class Digifix_TC_Guardian {
 
@@ -65,13 +65,73 @@ final class Digifix_TC_Guardian {
 	 * File storage (mirrors Digifix_TC_Storage)
 	 * ------------------------------------------------------------------ */
 
-	private static function dir() {
+	/** Folder the plugin used before 1.2.2 (inside wp-content). Read as a fallback until the plugin has moved it. */
+	private static function legacy_dir() {
 		return WP_CONTENT_DIR . '/digifix-tc-data';
 	}
 
+	/**
+	 * Base of the uploads folder, found the same way as
+	 * Digifix_TC_Bk_Util::uploads_base() (keep the two in step). It is worked
+	 * out once, as early as possible, so that filters added by plugins loaded
+	 * later cannot make the guardian and the plugin disagree. On multisite
+	 * the main site's uploads folder is used for every site.
+	 *
+	 * @return string '' while WordPress is not ready (no database yet).
+	 */
+	private static function uploads_base() {
+		static $base = null;
+		if ( null !== $base ) {
+			return $base;
+		}
+		if ( ! function_exists( 'wp_upload_dir' ) || ! isset( $GLOBALS['wpdb'] ) || ! is_object( $GLOBALS['wpdb'] ) ) {
+			return '';
+		}
+		$upload   = array();
+		$switched = false;
+		try {
+			if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_main_site_id' ) && function_exists( 'switch_to_blog' ) ) {
+				$switched = switch_to_blog( get_main_site_id() );
+			}
+			$upload = wp_upload_dir( null, false );
+		} catch ( Throwable $e ) {
+			$upload = array();
+		}
+		if ( $switched && function_exists( 'restore_current_blog' ) ) {
+			restore_current_blog();
+		}
+		$dir = is_array( $upload ) && ! empty( $upload['basedir'] ) && is_string( $upload['basedir'] ) ? rtrim( $upload['basedir'], '/\\' ) : '';
+		if ( '' !== $dir ) {
+			$base = $dir;
+		}
+		return $dir;
+	}
+
+	/**
+	 * Folder for the guardian's state files, in the uploads folder. Until the
+	 * plugin has moved a pre-1.2.2 folder there, that one is used.
+	 *
+	 * @return string '' when WordPress is not ready and there is no old folder.
+	 */
+	public static function data_dir() {
+		$base   = self::uploads_base();
+		$legacy = self::legacy_dir();
+		if ( '' === $base ) {
+			return is_dir( $legacy ) ? $legacy : '';
+		}
+		$dir = $base . '/digifix-tc-data';
+		return ! is_dir( $dir ) && is_dir( $legacy ) ? $legacy : $dir;
+	}
+
+	/** Path of a file in the state folder, or '' when there is no folder yet. */
+	private static function path( $file ) {
+		$dir = self::data_dir();
+		return '' === $dir ? '' : $dir . '/' . $file;
+	}
+
 	private static function read( $name ) {
-		$file = self::dir() . '/' . $name . '.json';
-		if ( ! file_exists( $file ) ) {
+		$file = self::path( $name . '.json' );
+		if ( '' === $file || ! file_exists( $file ) ) {
 			return null;
 		}
 		$data = json_decode( (string) @file_get_contents( $file ), true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
@@ -79,10 +139,14 @@ final class Digifix_TC_Guardian {
 	}
 
 	private static function write( $name, $data ) {
-		if ( ! is_dir( self::dir() ) ) {
-			@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+		$dir = self::data_dir();
+		if ( '' === $dir ) {
+			return;
 		}
-		$file = self::dir() . '/' . $name . '.json';
+		if ( ! is_dir( $dir ) ) {
+			@mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+		}
+		$file = $dir . '/' . $name . '.json';
 		$json = json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
 		if ( false === $json ) {
 			return; // Never replace the file with an empty one.
@@ -94,12 +158,13 @@ final class Digifix_TC_Guardian {
 	}
 
 	private static function secret() {
-		$file = self::dir() . '/secret.php';
-		if ( ! file_exists( $file ) ) {
+		$file = self::path( 'secret.php' );
+		if ( '' === $file || ! file_exists( $file ) ) {
 			return null;
 		}
-		$secret = include $file;
-		return is_string( $secret ) && strlen( $secret ) >= 32 ? $secret : null;
+		// Read as text, never executed: the file sits in the uploads folder.
+		$source = (string) @file_get_contents( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		return preg_match( "/return '([A-Za-z0-9]{32,})';/", $source, $m ) ? $m[1] : null;
 	}
 
 	private static function sign( $action, $ts ) {
@@ -163,6 +228,28 @@ final class Digifix_TC_Guardian {
 		}
 	}
 
+	/**
+	 * The requested URL for the fatal error record, cleaned and cut to 200
+	 * characters. esc_url_raw() keeps %xx escapes (sanitize_text_field() would
+	 * strip them). Empty if the fatal error happened before WordPress's
+	 * formatting functions were loaded.
+	 */
+	private static function request_uri() {
+		if ( ! isset( $_SERVER['REQUEST_URI'] ) || ! function_exists( 'esc_url_raw' ) || ! function_exists( 'wp_unslash' ) ) {
+			return '';
+		}
+		return substr( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), 0, 200 );
+	}
+
+	/** The posted AJAX action, cleaned (empty in the same early-fatal case). */
+	private static function posted_action() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- only compared with a fixed name to tell whether this request was a restore step; nothing is processed.
+		if ( ! isset( $_POST['action'] ) || ! function_exists( 'sanitize_key' ) || ! function_exists( 'wp_unslash' ) ) {
+			return '';
+		}
+		return sanitize_key( wp_unslash( $_POST['action'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+	}
+
 	private static function handle_fatal( $error ) {
 		if ( self::$handled || ! is_array( $error ) || ! in_array( $error['type'] ?? 0, self::FATAL_TYPES, true ) ) {
 			return;
@@ -174,7 +261,7 @@ final class Digifix_TC_Guardian {
 			'message' => substr( (string) $error['message'], 0, 500 ),
 			'file'    => (string) $error['file'],
 			'line'    => (int) $error['line'],
-			'url'     => isset( $_SERVER['REQUEST_URI'] ) ? substr( (string) $_SERVER['REQUEST_URI'], 0, 200 ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			'url'     => self::request_uri(),
 		);
 
 		$fatals   = (array) self::read( 'fatals' );
@@ -185,7 +272,7 @@ final class Digifix_TC_Guardian {
 
 		$req     = self::read( 'restore-request' );
 		$legacy  = 'totalcare' !== ( $req['engine'] ?? 'wpvivid' );
-		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && isset( $_POST['action'] ) && 'digifix_tc_guardian_restore' === $_POST['action'] ) : self::$driving; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput -- only compared with a fixed string to tell whether this request was a restore step.
+		$restore = $legacy ? ( defined( 'DOING_AJAX' ) && DOING_AJAX && 'digifix_tc_guardian_restore' === self::posted_action() ) : self::$driving;
 		if ( $req && in_array( $req['status'] ?? '', array( 'pending', 'running', 'finishing' ), true ) && $restore ) {
 			$req['errors'] = (int) ( $req['errors'] ?? 0 ) + 1;
 			$req['error']  = 'PHP fatal during restore: ' . $entry['message'] . ' in ' . $entry['file'] . ':' . $entry['line'];
@@ -300,7 +387,7 @@ final class Digifix_TC_Guardian {
 		$done  = true;
 		// Read-only progress page; the 128-bit random token in the link is the credential.
 		$token = isset( $_GET['digifix_tc_restore_status'] ) ? preg_replace( '/[^a-f0-9]/', '', sanitize_text_field( wp_unslash( $_GET['digifix_tc_restore_status'] ) ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		if ( ! file_exists( self::dir() . '/restore-request.json' ) ) {
+		if ( ! file_exists( self::path( 'restore-request.json' ) ) ) {
 			// Progress page of a restore that has already been reconciled.
 			$last = '' !== $token ? self::read( 'restore-last' ) : null;
 			if ( $last && ! empty( $last['token'] ) && hash_equals( (string) $last['token'], $token ) ) {
@@ -358,7 +445,10 @@ final class Digifix_TC_Guardian {
 		if ( $stalled < 90 ) {
 			return;
 		}
-		$marker = self::dir() . '/restore-watchdog.txt';
+		$marker = self::path( 'restore-watchdog.txt' );
+		if ( '' === $marker ) {
+			return;
+		}
 		if ( file_exists( $marker ) && time() - filemtime( $marker ) < 60 ) {
 			return;
 		}
@@ -375,11 +465,20 @@ final class Digifix_TC_Guardian {
 		return self::drive();
 	}
 
+	/** Take the restore lock without waiting. @return bool False if another request holds it. */
+	private static function take_lock() {
+		$dir = self::data_dir();
+		if ( '' === $dir ) {
+			return false;
+		}
+		@mkdir( $dir, 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+		self::$lock = fopen( $dir . '/restore.lock', 'c' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+		return self::$lock && flock( self::$lock, LOCK_EX | LOCK_NB );
+	}
+
 	/** One locked step of the restore. @return array Response data. */
 	private static function drive() {
-		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
-		self::$lock = fopen( self::dir() . '/restore.lock', 'c' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-		if ( ! self::$lock || ! flock( self::$lock, LOCK_EX | LOCK_NB ) ) {
+		if ( ! self::take_lock() ) {
 			return array(
 				'ok'   => true,
 				'busy' => true,
@@ -451,14 +550,22 @@ final class Digifix_TC_Guardian {
 		);
 	}
 
-	/** The restore engine lives in TotalCare's own plugin folder. */
+	/**
+	 * The restore engine lives in TotalCare's own plugin folder. The plugin
+	 * stores its path (worked out from the plugin's own file location) in the
+	 * restore request together with an HMAC signature made with the site
+	 * secret, so a file written into the state folder by anything else is never
+	 * loaded. Only a file named includes/backup/loader.php is accepted.
+	 *
+	 * @return string '' when the path is missing or not signed.
+	 */
 	private static function engine_loader( array $req ) {
-		$basename = str_replace( '\\', '/', (string) ( $req['plugin_basename'] ?? '' ) );
-		$folder   = false !== strpos( $basename, '/' ) ? substr( $basename, 0, strpos( $basename, '/' ) ) : '';
-		if ( '' === $folder || '.' === $folder || '..' === $folder ) {
+		$loader = str_replace( '\\', '/', (string) ( $req['engine_loader'] ?? '' ) );
+		$secret = self::secret();
+		if ( ! $secret || '/includes/backup/loader.php' !== substr( $loader, -27 ) ) {
 			return '';
 		}
-		return WP_PLUGIN_DIR . '/' . $folder . '/includes/backup/loader.php';
+		return hash_equals( hash_hmac( 'sha256', 'engine_loader|' . $loader, $secret ), (string) ( $req['engine_sig'] ?? '' ) ) ? $loader : '';
 	}
 
 	private static function json( array $data, $code = 200 ) {
@@ -550,8 +657,9 @@ final class Digifix_TC_Guardian {
 	public static function keep_totalcare_active( $plugins ) {
 		$req      = self::read( 'restore-request' );
 		$basename = $req['plugin_basename'] ?? '';
-		if ( ! $basename && file_exists( self::dir() . '/plugin-basename.txt' ) ) {
-			$basename = trim( (string) file_get_contents( self::dir() . '/plugin-basename.txt' ) );
+		$saved    = self::path( 'plugin-basename.txt' );
+		if ( ! $basename && '' !== $saved && file_exists( $saved ) ) {
+			$basename = trim( (string) file_get_contents( $saved ) );
 		}
 		if ( $basename && ! in_array( $basename, (array) $plugins, true ) ) {
 			$plugins[] = $basename;
@@ -561,7 +669,7 @@ final class Digifix_TC_Guardian {
 
 	/** Restart a stalled restore chain from any normal page load. */
 	public static function watchdog() {
-		if ( ! file_exists( self::dir() . '/restore-request.json' ) ) {
+		if ( ! file_exists( self::path( 'restore-request.json' ) ) ) {
 			return;
 		}
 		$req = self::read( 'restore-request' );
@@ -584,9 +692,7 @@ final class Digifix_TC_Guardian {
 			wp_send_json( array( 'ok' => true, 'idle' => true ) );
 		}
 
-		@mkdir( self::dir(), 0755, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
-		self::$lock = fopen( self::dir() . '/restore.lock', 'c' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-		if ( ! self::$lock || ! flock( self::$lock, LOCK_EX | LOCK_NB ) ) {
+		if ( ! self::take_lock() ) {
 			wp_send_json( array( 'ok' => true, 'busy' => true ) );
 		}
 

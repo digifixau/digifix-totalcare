@@ -4,7 +4,7 @@ Tags: backup, restore, updates, maintenance, s3
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,7 +56,7 @@ Digifix TotalCare runs a site's routine maintenance on its own and tells you wha
 So that you know exactly what changes on the server:
 
 * Two database tables, `{prefix}digifix_tc_jobs` and `{prefix}digifix_tc_events`, for the job queue and the activity log.
-* Two folders, `wp-content/digifix-tc-data/` (settings for the guardian, work files and an encryption key) and `wp-content/digifix-tc-rollback/` (copies of plugins and themes taken just before they are updated). Work files containing database data are kept in a folder with a random, unguessable name.
+* Two folders in the uploads folder, `uploads/digifix-tc-data/` (state for the guardian, work files and an encryption key) and `uploads/digifix-tc-rollback/` (copies of plugins and themes taken just before they are updated). Work files containing database data are kept in a folder with a random, unguessable name. Versions up to 1.2.1 used folders in `wp-content`; they are moved to the uploads folder automatically.
 * A small "guardian" must-use plugin, `wp-content/mu-plugins/digifix-tc-guardian.php`. It records PHP fatal errors, rolls back an update that crashes the site, and drives restores. Where `mu-plugins` is read-only, the same file is installed as the `wp-content/fatal-error-handler.php` drop-in instead, unless another plugin already uses that drop-in. It does not replace WordPress's fatal error handler.
 * On Apache-compatible servers, a short rule in `.htaccess`, between `# BEGIN Digifix TotalCare` and `# END Digifix TotalCare` markers. It only takes effect on LiteSpeed servers, where it stops background requests to `admin-ajax.php` and `wp-cron.php` from being cut off.
 
@@ -168,6 +168,14 @@ No. The backup warns you when it finds any. Empty folders aren't backed up eithe
 
 == Changelog ==
 
+= 1.2.2 =
+* The data and rollback folders are now in the uploads folder instead of wp-content. Existing sites are moved automatically.
+* The encryption key file is only ever read as text, never run as PHP.
+* The restore engine path stored with a restore is signed, and the guardian only loads a signed path.
+* Recorded fatal-error addresses are sanitised.
+* Plugin and WordPress versions are read with WordPress functions instead of file paths.
+* The LiteSpeed rule also matches WordPress installed in a sub-folder.
+
 = 1.2.1 =
 * Styles and scripts are now loaded through the WordPress enqueue APIs (maintenance and restore pages, printable report).
 * The restore engine runs from the plugin folder; no PHP code is copied into wp-content any more.
@@ -190,6 +198,9 @@ No. The backup warns you when it finds any. Empty folders aren't backed up eithe
 * Safe updates with health checks and automatic rollback, Wordfence scan scheduling, email and webhook reports, and monthly PDF reports.
 
 == Upgrade Notice ==
+
+= 1.2.2 =
+Moves TotalCare's data folders into the uploads folder (done automatically) and tightens file handling and input checks.
 
 = 1.2.1 =
 Changes requested in the WordPress.org review: assets use the enqueue APIs, no code is copied into wp-content and restores are safer.

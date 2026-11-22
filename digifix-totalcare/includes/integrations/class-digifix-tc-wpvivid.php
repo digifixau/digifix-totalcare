@@ -204,9 +204,11 @@ class Digifix_TC_WPvivid {
 				'exclude-tables' => array( $wpdb->prefix . 'digifix_tc_jobs', $wpdb->prefix . 'digifix_tc_events' ),
 				// Guardian state and rollback copies must not be overwritten by a
 				// restore (and the copies would bloat every backup).
-				'exclude_files'  => array(
-					array( 'type' => 'folder', 'path' => WP_CONTENT_DIR . '/digifix-tc-data' ),
-					array( 'type' => 'folder', 'path' => WP_CONTENT_DIR . '/digifix-tc-rollback' ),
+				'exclude_files'  => array_map(
+					function ( $dir ) {
+						return array( 'type' => 'folder', 'path' => $dir );
+					},
+					Digifix_TC_Bk_Areas::protected_dirs()
 				),
 			)
 		);

@@ -41,6 +41,13 @@ class Digifix_TC_Installer {
 		if ( ! $target || ! file_exists( $target ) || md5_file( $target ) !== md5_file( $source ) ) {
 			self::install_guardian();
 		}
+		// The data folder moves into the uploads folder only once the guardian
+		// that looks for it there is installed (an older one reads wp-content).
+		$mode   = self::guardian_mode();
+		$target = 'mu' === $mode ? self::mu_path() : ( 'dropin' === $mode ? self::dropin_path() : '' );
+		if ( '' === $mode || ( file_exists( $target ) && md5_file( $target ) === md5_file( $source ) ) ) {
+			Digifix_TC_Storage::migrate();
+		}
 		if ( get_option( 'digifix_tc_installed_version' ) !== DIGIFIX_TC_VERSION ) {
 			self::litespeed_rule( true );
 			self::import_wpvivid_credentials();
@@ -57,15 +64,16 @@ class Digifix_TC_Installer {
 	 * Harmless elsewhere: the rule only applies under LiteSpeed.
 	 */
 	public static function litespeed_rule( $add ) {
-		$file = ABSPATH . '.htaccess';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		$file = get_home_path() . '.htaccess';
 		if ( ! file_exists( $file ) || ! is_writable( $file ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 			return false;
 		}
-		require_once ABSPATH . 'wp-admin/includes/misc.php';
 		$lines = $add ? array(
 			'<IfModule LiteSpeed>',
 			'RewriteEngine On',
-			'RewriteRule ^(wp-admin/admin-ajax\.php|wp-cron\.php)$ - [E=noabort:1,E=noconntimeout:1]',
+			'RewriteRule (^|/)(wp-admin/admin-ajax\.php|wp-cron\.php)$ - [E=noabort:1,E=noconntimeout:1]',
 			'</IfModule>',
 		) : array();
 		return insert_with_markers( $file, self::HTACCESS_MARKER, $lines );

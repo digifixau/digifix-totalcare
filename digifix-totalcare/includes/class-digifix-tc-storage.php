@@ -4,7 +4,7 @@
  *
  * Anything that must survive a WPvivid database restore (restore requests, the
  * in-flight update marker, fatal error records, the guardian secret) lives in
- * wp-content/digifix-tc-data/ rather than in the database.
+ * the uploads folder (uploads/digifix-tc-data/) rather than in the database.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,12 +13,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Digifix_TC_Storage {
 
+	/**
+	 * Folders live in the uploads folder. The guardian and the backup engine
+	 * work the location out the same way (see Digifix_TC_Bk_Util).
+	 */
 	public static function data_dir() {
-		return WP_CONTENT_DIR . '/digifix-tc-data';
+		return Digifix_TC_Bk_Util::data_dir();
 	}
 
 	public static function rollback_dir() {
-		return WP_CONTENT_DIR . '/digifix-tc-rollback';
+		return Digifix_TC_Bk_Util::rollback_dir();
+	}
+
+	/**
+	 * Before 1.2.2 both folders were in wp-content. Move the data folder (it
+	 * holds the encryption key and the restore state) to the uploads folder.
+	 * Snapshots in the old rollback folder are left to age out, because
+	 * in-flight records hold their absolute paths.
+	 */
+	public static function migrate() {
+		$legacy = Digifix_TC_Bk_Util::legacy_dir( 'digifix-tc-data' );
+		$base   = Digifix_TC_Bk_Util::uploads_base();
+		if ( '' === $legacy || '' === $base || ! is_dir( $legacy ) || Digifix_TC_Restore::in_progress() ) {
+			return;
+		}
+		$new = $base . '/digifix-tc-data';
+		if ( ! is_dir( $new ) ) {
+			wp_mkdir_p( $base );
+			if ( @rename( $legacy, $new ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename
+				Digifix_TC_Logger::log( 'system', 'info', 'system.migrated', 'Moved the TotalCare data folder into the uploads folder.' );
+			}
+		} elseif ( file_exists( $new . '/secret.php' ) ) {
+			Digifix_TC_Bk_Util::rrmdir( $legacy );
+		}
 	}
 
 	public static function ensure_dirs() {
@@ -64,15 +91,18 @@ class Digifix_TC_Storage {
 	}
 
 	/**
-	 * Shared HMAC secret for loopback requests. Stored as a PHP file so it is
-	 * never served and survives a database restore.
+	 * Shared HMAC secret for loopback requests. Stored in a file with a PHP
+	 * header so a web server never shows it (and in a file rather than the
+	 * database so it survives a database restore). It is only ever read as
+	 * text; the file is never included.
 	 */
 	public static function secret() {
 		$file = self::data_dir() . '/secret.php';
 		if ( file_exists( $file ) ) {
-			$secret = include $file;
-			if ( is_string( $secret ) && strlen( $secret ) >= 32 ) {
-				return $secret;
+			// Read as text, never executed: the file sits in the uploads folder.
+			$source = (string) file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			if ( preg_match( "/return '([A-Za-z0-9]{32,})';/", $source, $m ) ) {
+				return $m[1];
 			}
 		}
 		self::ensure_dirs();

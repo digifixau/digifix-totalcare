@@ -92,7 +92,7 @@ $digifix_tc_text     = function ( $name, $type = 'text', $placeholder = '', $cla
 				<?php if ( $digifix_tc_remote ) : ?>
 					<?php echo self::badge( 'success', 'Configured' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?> Backups go to <strong><?php echo esc_html( $digifix_tc_s['s3_bucket'] . '/' . ( $digifix_tc_s['s3_path'] ? $digifix_tc_s['s3_path'] : Digifix_TC_Bk_Util::default_folder() ) ); ?></strong>. Leave the secret blank to keep the current one.
 				<?php elseif ( $digifix_tc_stored && ! $digifix_tc_secret ) : ?>
-					<?php echo self::badge( 'error', 'Secret unreadable' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?> The stored secret key can no longer be decrypted (wp-content/digifix-tc-data/secret.php changed). Enter it again.
+					<?php echo self::badge( 'error', 'Secret unreadable' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?> The stored secret key can no longer be decrypted (the key file in uploads/digifix-tc-data changed). Enter it again.
 				<?php else : ?>
 					<?php echo self::badge( 'error', 'Not configured' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?> Enter the bucket details. Saving tests the connection with a small file.
 				<?php endif; ?>
